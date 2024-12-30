@@ -5,21 +5,7 @@ import os
 import glob
 import pandas as pd
 from copy import deepcopy
-
-def find_mid(data: dict[dict]) -> float:
-    """
-    Find the mid price of the order book.
-    The mid price is the first price level where the is_buy column converts from True to False. 
-    Before finding the mid price, the data must be sorted by price in ascending order.
-    """
-    sorted_keys = sorted(data.keys())
-    for key in sorted_keys:
-        if not data[key]['is_buy']:
-            return key
-    raise ValueError("No mid price found")
-
-
-
+import numba
 
 def build_order_book_snapshots(df: pd.DataFrame):
     """
@@ -160,6 +146,96 @@ def build_order_book_snapshots(df: pd.DataFrame):
     
     return snapshots
 
+@numba.njit(cache=True, fastmath=True)
+def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
+    levels = {}
+
+    for idx, row in enumerate(arr):
+        price = row["placeholder"]
+        size = row["placeholder"]
+        update_type = row["placeholder"]
+        is_buy = row["placeholder"]
+
+        if price in levels:            
+            # Apply update type logic
+            if update_type == 0:
+                # ADD means increment the size
+                levels[price]['size'] += size
+                #levels[price]['time_since_last_update'] = 1
+                
+            elif update_type == 1:
+                # SUB means decrement the size
+                levels[price]['size'] -= size
+                #levels[price]['time_since_last_update'] = 1
+                
+            elif update_type == 2:
+                # MATCH also means decrement the size
+                levels[price]['size'] -= size
+                #levels[price]['time_since_last_update'] = 1
+                
+            elif update_type == 3:
+                # SET means overwrite the size and set is_buy
+                levels[price]['size'] = size
+                levels[price]['is_buy'] = is_buy
+                #levels[price]['time_since_last_update'] = 1
+                
+            elif update_type == 4:
+                # DELETE means remove the price level entirely
+                del levels[price]
+                
+            elif update_type == 5:
+                # SNAPSHOT: first set the existing level's size,
+                # then create a new level object and assign it.
+                
+                # 1) Overwrite existing size
+                levels[price]['size'] = size
+                levels[price]['is_buy'] = is_buy
+                
+                # 2) Create a new level from scratch and assign
+                new_level = {
+                    'price': price,
+                    'size': size,
+                    'is_buy': is_buy,
+                    #'time_since_last_update': 1
+                }
+                levels[price] = new_level
+                continue
+                
+            else:
+                # Unknown update type (optional: handle error/logging)
+                pass
+                
+        else:
+            # If this price level does not exist in the book:
+            # We create a brand-new level and insert it
+            new_level = {
+                'price': price,
+                'size': size,
+                'is_buy': is_buy,
+                #'time_since_last_update': 1
+            }
+            levels[price] = new_level
+
+        # If the number of levels exceeds 256, find the target index to remove
+        # to do this, find the mid price and if the remove the key that is farthest from the mid price
+        # to find the mid price, find the index where the is_buy column converts from True to False, making sure that the levels are ordered by price (in ascending order)
+
+        if len(levels) > 128:
+            count_of_is_buy = sum([1 for key in levels.keys() if levels[key]['is_buy']])
+            count_of_is_sell = sum([1 for key in levels.keys() if not levels[key]['is_buy']])
+            sorted_keys = sorted(levels.keys())
+            if count_of_is_buy > count_of_is_sell:
+                min_key = min(sorted_keys)
+                del levels[min_key]
+            else:
+                max_key = max(sorted_keys)
+                del levels[max_key]
+
+        if len(levels) == 128:
+            snapshots[idx] = deepcopy(levels)
+    
+    return snapshots
+
 def center_ob_slices(data: pd.DataFrame, target_depth: int):
     """
     Center the order book slices around the target depth.
@@ -201,6 +277,28 @@ def center_ob_slices(data: pd.DataFrame, target_depth: int):
     #return sliced_data
     return data
 
+
+def map_order_type(update_type: str) -> np.int64:
+    if update_type == 'ADD':
+        return 0
+
+    elif update_type == 'SUB':
+        return 1
+
+    elif update_type == 'MATCH':
+        return 2
+
+    elif update_type == 'SET':
+        return 3
+
+    elif update_type == 'DELETE':
+        return 4
+
+    elif update_type == 'SNAPSHOT':
+        return 5
+    else:
+        raise ValueError(f"Unknown update type: {update_type}")
+
 if __name__ == "__main__":
     depth = 128
     raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201_fragment.csv", engine="pyarrow")
@@ -220,18 +318,14 @@ if __name__ == "__main__":
 
     raw_data.rename(columns={"time_exchange_int": "time_exchange", "time_coinapi_int": "time_coinapi"}, inplace=True)
 
+    raw_data['update_type'] = raw_data['update_type'].apply(map_order_type)
+    raw_data['is_buy'] = raw_data['is_buy'].apply(lambda x: 1 if x else 0)
 
-    ob_state = build_order_book_snapshots(raw_data)
-
-    output_arr = np.zeros((len(ob_state), depth, 3), dtype=np.int64)
-
-    for idx, slice in enumerate(ob_state):
-        print(idx)
-        centered_slice: np.dtype = center_ob_slices(slice, depth)
-        output_arr[idx] = centered_slice
-
-    print(output_arr)
-    np.save("test.npy", output_arr)
+    raw_data = raw_data.to_numpy(dtype=np.int64)
+    results = np.zeros((len(raw_data), depth, 3), dtype=np.int64)
+    ob_state = nb_build_order_book_snapshots(raw_data, )
+    
+    np.save("test.npy", ob_state)
 
     #sorted_levels = sorted(ob_state[-1].keys())
     #print(ob_state[-1])
