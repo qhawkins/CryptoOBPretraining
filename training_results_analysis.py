@@ -35,7 +35,7 @@ if __name__ == "__main__":
         elif batch_size == 4096:
             plt.plot(progress["training_iteration"], progress["loss"], "blue")
 
-        print(progress.info())        
+        #   print(progress.info())        
 
     plt.xlabel("Iteration")
     plt.ylabel("MSE Loss")

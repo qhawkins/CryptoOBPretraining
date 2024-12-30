@@ -227,3 +227,22 @@ class LargeFCModel(torch.nn.Module):
         x = self.fc17(x)
         x = x.view(-1, self.depth_dim, self.features_dim, self.temporal_dim)
         return x
+    
+class ShallowLSTM(torch.nn.Module):
+    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
+        super().__init__()
+        self.depth_dim = input_shape[0]
+        self.features_dim = input_shape[1]
+        self.temporal_dim = input_shape[2]
+        self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.lstm = torch.nn.LSTM((self.depth_dim, self.features_dim, self.temporal_dim), 2048, 1, batch_first=True, dropout=dropout, num_layers=8)
+        self.fc1 = torch.nn.Linear(2048, output_shape)
+
+
+    def forward(self, x: torch.Tensor):
+        x = x.view(-1, self.inputs_shape)
+        x, _ = self.lstm(x)
+        x = self.fc1(x)
+        x = x.view(-1, self.depth_dim, self.features_dim, self.temporal_dim)
+        return x
