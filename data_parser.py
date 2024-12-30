@@ -147,15 +147,24 @@ def build_order_book_snapshots(df: pd.DataFrame):
     return snapshots
 
 @numba.njit(cache=True, fastmath=True)
+def convert_dict_to_arr(levels: dict):
+    intermediary_array = np.zeros((len(levels), 3), dtype=np.int64)
+    for idx, key in enumerate(levels.keys()):
+        intermediary_array[idx, 0] = levels[key]['price']
+        intermediary_array[idx, 1] = levels[key]['size']
+        intermediary_array[idx, 2] = levels[key]['is_buy']
+    return intermediary_array
+
+@numba.njit(cache=True, fastmath=True)
 def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
     levels = {}
 
     for idx, row in enumerate(arr):
-        price = row["placeholder"]
-        size = row["placeholder"]
-        update_type = row["placeholder"]
-        is_buy = row["placeholder"]
-
+        #print(len(row))
+        price = row[2]
+        size = row[3]
+        update_type = row[0]
+        is_buy = row[1]
         if price in levels:            
             # Apply update type logic
             if update_type == 0:
@@ -208,6 +217,7 @@ def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
         else:
             # If this price level does not exist in the book:
             # We create a brand-new level and insert it
+            #print("Creating new level")
             new_level = {
                 'price': price,
                 'size': size,
@@ -221,6 +231,7 @@ def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
         # to find the mid price, find the index where the is_buy column converts from True to False, making sure that the levels are ordered by price (in ascending order)
 
         if len(levels) > 128:
+            #print("Excess length")
             count_of_is_buy = sum([1 for key in levels.keys() if levels[key]['is_buy']])
             count_of_is_sell = sum([1 for key in levels.keys() if not levels[key]['is_buy']])
             sorted_keys = sorted(levels.keys())
@@ -232,7 +243,8 @@ def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
                 del levels[max_key]
 
         if len(levels) == 128:
-            snapshots[idx] = deepcopy(levels)
+            #print(f"Snapshot {idx}")
+            snapshots[idx] = convert_dict_to_arr(levels)
     
     return snapshots
 
@@ -320,10 +332,19 @@ if __name__ == "__main__":
 
     raw_data['update_type'] = raw_data['update_type'].apply(map_order_type)
     raw_data['is_buy'] = raw_data['is_buy'].apply(lambda x: 1 if x else 0)
+    raw_data['entry_px'] = (raw_data['entry_px']*1e9).astype(np.int64)
+    raw_data['entry_sx'] = (raw_data['entry_sx']*1e9).astype(np.int64)
+
+    print(raw_data.info())
+    #exit()
 
     raw_data = raw_data.to_numpy(dtype=np.int64)
+    raw_data = raw_data[:, :4]
+    print(raw_data.shape)
+    print(raw_data[0, :])
+    #exit()
     results = np.zeros((len(raw_data), depth, 3), dtype=np.int64)
-    ob_state = nb_build_order_book_snapshots(raw_data, )
+    ob_state = nb_build_order_book_snapshots(raw_data, results)
     
     np.save("test.npy", ob_state)
 
