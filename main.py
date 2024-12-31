@@ -112,8 +112,11 @@ class Trainer:
         test_size = total_size - train_size - val_size
 
         self.train_ds, self.val_ds, self.test_ds = random_split(
-            self.dataset, [train_size, val_size, test_size]
+            self.dataset, [train_size, val_size]
         )
+        self.train_ds = self.dataset[:train_size]
+        self.val_ds = self.dataset[train_size:train_size+val_size]
+        self.test_ds = self.dataset[:test_size]
 
         self.train_dataloader = DataLoader(self.train_ds, batch_size=self.config['batch_size'], shuffle=True, drop_last=True, num_workers=6, prefetch_factor=4, pin_memory=True)
         self.val_dataloader = DataLoader(self.val_ds, batch_size=self.config['batch_size'], shuffle=False, drop_last=True, num_workers=6, prefetch_factor=4, pin_memory=True)
