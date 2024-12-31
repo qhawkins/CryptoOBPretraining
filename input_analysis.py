@@ -19,7 +19,7 @@ def normalize_data(data: torch.Tensor):
 
     data[:, :, 0] = normalize_slice(data[:, :, 0])
     data[:, :, 1] = normalize_slice(data[:, :, 1])
-    data[:, :, 2] = normalize_slice(data[:, :, 2])
+#    data[:, :, 2] = normalize_slice(data[:, :, 2])
 
     return data
 

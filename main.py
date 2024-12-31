@@ -7,7 +7,7 @@ import numpy as np
 from ray import train, tune
 from training_classes import CombinedNanPlateauStopper, PretrainingDataset
 import ray
-from models import SmallFCModel, MediumFCModel, LargeFCModel
+from models import SmallFCModel, MediumFCModel, LargeFCModel, ShallowLSTMModel, DeepLSTMModel, TinyLSTMModel
 from torch.masked import MaskedTensor
 
 def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, device='cuda'):
@@ -48,10 +48,18 @@ class Trainer:
         elif self.config['model_size'] == 'medium':
             self.model = MediumFCModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
 
-
         elif self.config['model_size'] == 'large':
             self.model = LargeFCModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
 
+        elif self.config['model_size'] == 'shallow_lstm':
+            self.model = ShallowLSTMModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
+
+        elif self.config['model_size'] == 'deep_lstm':
+            self.model = DeepLSTMModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
+            
+        elif self.config['model_size'] == 'tiny_lstm':
+            self.model = TinyLSTMModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
+            
         if config['loss'] == 'mse':
             self.criterion = torch.nn.MSELoss().to('cuda')
             self.tracking_loss = torch.nn.MSELoss().to('cuda')
@@ -75,7 +83,7 @@ class Trainer:
         elif self.config['optimizer'] == 'adamw':
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config['lr'])
 
-        self.dataset = PretrainingDataset(np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test.npy"), temporal_offset=self.temporal_dim)
+        self.data = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test.npy")
         self.model_name = self.config["model_name"]
         self.train_loss_history = []
         self.val_loss_history = []
@@ -106,17 +114,17 @@ class Trainer:
             self.best_model_path = model_path
 
     def split_data(self):
-        total_size = len(self.dataset)
+        total_size = len(self.data)
         train_size = int(self.ratios[0] * total_size)
         val_size = int(self.ratios[1] * total_size)
         test_size = total_size - train_size - val_size
 
-        self.train_ds, self.val_ds, self.test_ds = random_split(
-            self.dataset, [train_size, val_size]
-        )
-        self.train_ds = self.dataset[:train_size]
-        self.val_ds = self.dataset[train_size:train_size+val_size]
-        self.test_ds = self.dataset[:test_size]
+        #self.train_ds, self.val_ds, self.test_ds = random_split(
+        #    self.dataset, [train_size, val_size]
+        #)
+        self.train_ds = PretrainingDataset(self.data[:train_size], self.temporal_dim)
+        self.val_ds = PretrainingDataset(self.data[train_size:train_size+val_size], self.temporal_dim)
+        self.test_ds = PretrainingDataset(self.data[:test_size], self.temporal_dim)
 
         self.train_dataloader = DataLoader(self.train_ds, batch_size=self.config['batch_size'], shuffle=True, drop_last=True, num_workers=6, prefetch_factor=4, pin_memory=True)
         self.val_dataloader = DataLoader(self.val_ds, batch_size=self.config['batch_size'], shuffle=False, drop_last=True, num_workers=6, prefetch_factor=4, pin_memory=True)
@@ -152,8 +160,11 @@ class Trainer:
 
                 with torch.amp.autocast(device_type='cuda'):
                     data = data.cuda()
+                    #print(50*"=-")
+                    #print(data.shape)
                     outputs = self.model(masked_inputs)  # Shape: (batch_size, seq_length -1, features)
                     # Compute loss only on masked positions
+                    #print(f"Outputs shape: {outputs.shape}, mask shape: {mask.shape}, data shape: {data.shape}")
                     loss = self.criterion(outputs[~mask], data[~mask])
                     #print(f"Loss: {loss.item()}, outputs shape: {outputs.shape}, data shape: {data.shape}, mask shape: {mask.shape}, outputs nan count: {torch.isnan(outputs).sum()}, data nan count: {torch.isnan(data).sum()}, mask nan count: {torch.isnan(mask).sum()}")
                     # For tracking purposes, compute tracking loss as before
@@ -278,9 +289,9 @@ if __name__ == '__main__':
         'dropout': tune.choice([0.1, 0.15, 0.25, 0.5]),
         'optimizer': tune.choice(['adam', 'adamw']),
         'lr': tune.uniform(1e-6, 1e-3),
-        'batch_size': tune.choice([2048, 4096]),
+        'batch_size': tune.choice([1024, 2048]),
         'loss': tune.choice(['mse']),#,'mae', 'huber']),
-        "model_size": tune.choice(["small", "medium", "large"]),
+        "model_size": tune.choice(["shallow_lstm", "deep_lstm", "tiny_lstm", "small", "medium", "large"]),
         'temporal_dim': 128,
         'mask_perc': tune.choice([0.15, 0.25, 0.35]),
         'depth_dim': 128

@@ -19,6 +19,7 @@ def normalize_data(data: torch.Tensor):
 
     data[:, :, 0] = normalize_slice(data[:, :, 0])
     data[:, :, 1] = normalize_slice(data[:, :, 1])
+    #data[:, :, 2] = normalize_slice(data[:, :, 2])
     data = data[:, :, :-1]
 
     return data
@@ -99,6 +100,7 @@ class PretrainingDataset(Dataset):
                 raise IndexError(f"Index {idx} is out of bounds for dataset with length {self.length}")
             normalized = normalize_data(self.data[idx:idx+self.offset])
             nan_count = torch.sum(torch.isnan(normalized))
+            #print(f"Shape of normalized slice {idx}:{idx+self.offset} is {normalized.shape}")
             if nan_count > 0:
                 print(f"Found {nan_count} nans in slice {idx}")
                 print(normalized)
@@ -106,6 +108,7 @@ class PretrainingDataset(Dataset):
             return normalized
         elif isinstance(idx, slice):
             normalized = self.data[idx]
+            #print(f"Shape of normalized slice in slice {idx} is {normalized.shape}")
             return normalized
         else:
             raise TypeError(f"Invalid index type: {type(idx)}. Expected int or slice.")

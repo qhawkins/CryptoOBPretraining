@@ -14,13 +14,13 @@ class SmallFCModel(torch.nn.Module):
         self.fc2 = torch.nn.Linear(4096, 4096)
         self.relu2 = torch.nn.ReLU()
         self.dropout2 = torch.nn.Dropout(dropout)
-        self.fc3 = torch.nn.Linear(4096, 8192)
+        self.fc3 = torch.nn.Linear(4096, 4096)
         self.relu3 = torch.nn.ReLU()
         self.dropout3 = torch.nn.Dropout(dropout)
-        self.fc4 = torch.nn.Linear(8192, 8192)
+        self.fc4 = torch.nn.Linear(4096, 4096)
         self.relu4 = torch.nn.ReLU()
         self.dropout4 = torch.nn.Dropout(dropout)
-        self.fc5 = torch.nn.Linear(8192, 4096)
+        self.fc5 = torch.nn.Linear(4096, 4096)
         self.relu5 = torch.nn.ReLU()
         self.dropout5 = torch.nn.Dropout(dropout)
         self.fc6 = torch.nn.Linear(4096, 4096)
@@ -49,7 +49,7 @@ class SmallFCModel(torch.nn.Module):
         x = self.relu6(x)
         x = self.dropout6(x)
         x = self.fc7(x)
-        x = x.view(-1, self.depth_dim, self.features_dim, self.temporal_dim)
+        x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x
 
 class MediumFCModel(torch.nn.Module):
@@ -225,24 +225,75 @@ class LargeFCModel(torch.nn.Module):
         x = self.relu16(x)
         x = self.dropout16(x)
         x = self.fc17(x)
-        x = x.view(-1, self.depth_dim, self.features_dim, self.temporal_dim)
+        x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+
         return x
     
-class ShallowLSTM(torch.nn.Module):
+class DeepLSTMModel(torch.nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
         super().__init__()
-        self.depth_dim = input_shape[0]
-        self.features_dim = input_shape[1]
-        self.temporal_dim = input_shape[2]
+        self.depth_dim = input_shape[1]
+        self.features_dim = input_shape[2]
+        self.temporal_dim = input_shape[0]
         self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
-        self.lstm = torch.nn.LSTM((self.depth_dim, self.features_dim, self.temporal_dim), 2048, 1, batch_first=True, dropout=dropout, num_layers=8)
-        self.fc1 = torch.nn.Linear(2048, output_shape)
+        self.lstm = torch.nn.RNN(self.features_dim*self.depth_dim, hidden_size = 512, batch_first=True, dropout=dropout, num_layers=16)
+        self.fc1 = torch.nn.Linear(512, self.features_dim*self.depth_dim)
 
 
     def forward(self, x: torch.Tensor):
-        x = x.view(-1, self.inputs_shape)
+        #x = x.view(-1, self.inputs_shape)
+        #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
+        x = x.view(-1, self.temporal_dim, self.features_dim* self.depth_dim)
         x, _ = self.lstm(x)
+        #x = x.view(-1, 2048)
         x = self.fc1(x)
-        x = x.view(-1, self.depth_dim, self.features_dim, self.temporal_dim)
+        x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        return x
+
+class ShallowLSTMModel(torch.nn.Module):
+    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
+        super().__init__()
+        self.depth_dim = input_shape[1]
+        self.features_dim = input_shape[2]
+        self.temporal_dim = input_shape[0]
+        self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.lstm = torch.nn.RNN(self.features_dim*self.depth_dim, hidden_size = 512, batch_first=True, dropout=dropout, num_layers=8)
+        self.fc1 = torch.nn.Linear(512, self.features_dim*self.depth_dim)
+
+
+    def forward(self, x: torch.Tensor):
+        #x = x.view(-1, self.inputs_shape)
+        #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
+        x = x.view(-1, self.temporal_dim, self.features_dim* self.depth_dim)
+        x, _ = self.lstm(x)
+        #x = x.view(-1, 2048)
+        x = self.fc1(x)
+        x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        return x
+
+class TinyLSTMModel(torch.nn.Module):
+    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
+        super().__init__()
+        self.depth_dim = input_shape[1]
+        self.features_dim = input_shape[2]
+        self.temporal_dim = input_shape[0]
+        self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.lstm = torch.nn.RNN(self.features_dim*self.depth_dim, hidden_size = 256, batch_first=True, dropout=dropout, num_layers=8)
+        self.fc1 = torch.nn.Linear(256, self.features_dim*self.depth_dim)
+
+
+    def forward(self, x: torch.Tensor):
+        #x = x.view(-1, self.inputs_shape)
+        #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
+        x = x.view(-1, self.temporal_dim, self.features_dim* self.depth_dim)
+        x, _ = self.lstm(x)
+        #x = x.view(-1, 2048)
+        x = self.fc1(x)
+        x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x
