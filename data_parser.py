@@ -117,7 +117,7 @@ def build_order_book_snapshots(df: pd.DataFrame):
         # to do this, find the mid price and if the remove the key that is farthest from the mid price
         # to find the mid price, find the index where the is_buy column converts from True to False, making sure that the levels are ordered by price (in ascending order)
 
-        if len(levels) > 128:
+        if len(levels) > 64:
             count_of_is_buy = sum([1 for key in levels.keys() if levels[key]['is_buy']])
             count_of_is_sell = sum([1 for key in levels.keys() if not levels[key]['is_buy']])
             sorted_keys = sorted(levels.keys())
@@ -141,7 +141,7 @@ def build_order_book_snapshots(df: pd.DataFrame):
             #print(f"Count of is_buy: {sum([1 for key in levels.keys() if levels[key]['is_buy']])}")
             #print(f"Deleted key: {min_key if distance_to_min > distance_to_max else max_key}, Mid price: {mid_price}, Distance to min: {distance_to_min}, Distance to max: {distance_to_max}")
 
-        if len(levels) == 128:
+        if len(levels) == 64:
             snapshots.append(pd.DataFrame.from_dict(deepcopy(levels), orient='index').drop(columns=["time_exchange", "time_coinapi"]).sort_values(by="price", ascending=True).reset_index(drop=True))
     
     return snapshots
@@ -230,7 +230,7 @@ def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
         # to do this, find the mid price and if the remove the key that is farthest from the mid price
         # to find the mid price, find the index where the is_buy column converts from True to False, making sure that the levels are ordered by price (in ascending order)
 
-        if len(levels) > 128:
+        if len(levels) > 64:
             #print("Excess length")
             count_of_is_buy = sum([1 for key in levels.keys() if levels[key]['is_buy']])
             count_of_is_sell = sum([1 for key in levels.keys() if not levels[key]['is_buy']])
@@ -242,7 +242,7 @@ def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
                 max_key = max(sorted_keys)
                 del levels[max_key]
 
-        if len(levels) == 128:
+        if len(levels) == 64:
             #print(f"Snapshot {idx}")
             snapshots[idx] = convert_dict_to_arr(levels)
     
@@ -312,7 +312,7 @@ def map_order_type(update_type: str) -> np.int64:
         raise ValueError(f"Unknown update type: {update_type}")
 
 if __name__ == "__main__":
-    depth = 128
+    depth = 64
     raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201_fragment.csv", engine="pyarrow")
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))

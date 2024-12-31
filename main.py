@@ -190,7 +190,7 @@ class Trainer:
 
                     with torch.amp.autocast(device_type='cuda'):
                         outputs = self.model(masked_inputs)
-                        loss = self.tracking_loss(outputs[~mask], data[~mask])
+                        loss = self.criterion(outputs[~mask], data[~mask])
 
                     self.val_loss_history.append(loss.item())
                     avg_val_loss += loss.item()
@@ -291,7 +291,7 @@ if __name__ == '__main__':
         "model_size": tune.choice(["shallow_lstm", "deep_lstm", "tiny_lstm", "small", "medium", "large"]),
         'temporal_dim': 128,
         'mask_perc': tune.choice([0.15, 0.25, 0.35]),
-        'depth_dim': 128
+        'depth_dim': 64
     }
 
     tuner = tune.Tuner(
