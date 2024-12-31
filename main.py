@@ -59,27 +59,26 @@ class Trainer:
             
         elif self.config['model_size'] == 'tiny_lstm':
             self.model = TinyLSTMModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
-            
+
+        #compiling
+        self.model = torch.compile(self.model)
+
         if config['loss'] == 'mse':
             self.criterion = torch.nn.MSELoss().to('cuda')
-            self.tracking_loss = torch.nn.MSELoss().to('cuda')
         
         elif config['loss'] == 'mae':
             self.criterion = torch.nn.L1Loss().to('cuda')
-            self.tracking_loss = torch.nn.MSELoss().to('cuda')
 
         elif config['loss'] == 'huber':
             self.criterion = torch.nn.HuberLoss().to('cuda')
-            self.tracking_loss = torch.nn.MSELoss().to('cuda')
 
         elif config['loss'] == 'smoothl1':
             self.criterion = torch.nn.SmoothL1Loss().to('cuda')
-            self.tracking_loss = torch.nn.MSELoss().to('cuda')
 
         if self.config['optimizer'] == 'adam':
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.config['lr'])
         elif self.config['optimizer'] == 'sgd':
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.config['lr']*100) #scaling based on equivelance to adam                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.config['lr'])                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
         elif self.config['optimizer'] == 'adamw':
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config['lr'])
 
@@ -168,14 +167,12 @@ class Trainer:
                     loss = self.criterion(outputs[~mask], data[~mask])
                     #print(f"Loss: {loss.item()}, outputs shape: {outputs.shape}, data shape: {data.shape}, mask shape: {mask.shape}, outputs nan count: {torch.isnan(outputs).sum()}, data nan count: {torch.isnan(data).sum()}, mask nan count: {torch.isnan(mask).sum()}")
                     # For tracking purposes, compute tracking loss as before
-                    tracking_loss = self.tracking_loss(outputs[~mask].detach(), data[~mask].detach())
 
                 self.scaler.scale(loss).backward()
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
 
-                self.train_loss_history.append(loss.item())
-                avg_train_loss += tracking_loss.item()
+                avg_train_loss += loss.item()
 
             avg_train_loss /= (i + 1)
 
@@ -200,7 +197,7 @@ class Trainer:
                 avg_val_loss /= (i + 1)
 
             # Reporting
-            train.report({'loss': avg_val_loss, "iteration": epoch})
+            train.report({'loss': avg_val_loss, "iteration": epoch, "train_loss": avg_train_loss})
 
             self.scheduler.step(avg_val_loss)
 
@@ -289,7 +286,7 @@ if __name__ == '__main__':
         'dropout': tune.choice([0.1, 0.15, 0.25, 0.5]),
         'optimizer': tune.choice(['adam', 'adamw']),
         'lr': tune.uniform(1e-6, 1e-3),
-        'batch_size': tune.choice([1024, 2048]),
+        'batch_size': tune.choice([2048, 4096]),
         'loss': tune.choice(['mse']),#,'mae', 'huber']),
         "model_size": tune.choice(["shallow_lstm", "deep_lstm", "tiny_lstm", "small", "medium", "large"]),
         'temporal_dim': 128,
