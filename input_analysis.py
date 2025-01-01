@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-inputs: np.dtype = np.load("test.npy")
+inputs: torch.Tensor = torch.load("test.pt")
 
 def normalize_slice(data: torch.Tensor):
     mean = torch.mean(data)
@@ -20,16 +20,20 @@ def normalize_data(data: torch.Tensor):
     data[:, :, 0] = normalize_slice(data[:, :, 0])
     data[:, :, 1] = normalize_slice(data[:, :, 1])
 #    data[:, :, 2] = normalize_slice(data[:, :, 2])
-
     return data
 
-print(inputs[:, :, :])
+#inputs = inputs[1032117:1032309, :, :]
+#print(f"Data nan count: {np.sum(np.isnan(inputs))}")
+#normalized_data = normalize_data(torch.tensor(inputs))
+#print(f"Normalized data nan count: {torch.sum(torch.isnan(normalized_data))}")
+#exit()
 print(inputs.shape)
 #print average number of each feature
-print(np.mean(inputs[:, :, 0]))
-print(np.mean(inputs[:, :, 1]))
-print(np.mean(inputs[:, :, 2]))
-normalized = normalize_data(torch.tensor(inputs))
-print(np.mean(normalized[:, :, 0]))
-print(np.mean(normalized[:, :, 1]))
-print(np.mean(normalized[:, :, 2]))
+print(torch.mean(inputs[:, :, 0]))
+print(torch.mean(inputs[:, :, 1]))
+
+print(inputs[0, :, 0]*100)
+print(inputs[0, :, 1]*100)
+normalized = normalize_data(inputs)
+print(torch.mean(normalized[:, :, 0]))
+print(torch.mean(normalized[:, :, 1]))

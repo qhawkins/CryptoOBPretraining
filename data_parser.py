@@ -149,7 +149,7 @@ def build_order_book_snapshots(df: pd.DataFrame):
 @numba.njit(cache=True, fastmath=True)
 def convert_dict_to_arr(levels: dict):
     intermediary_array = np.zeros((len(levels), 3), dtype=np.int64)
-    for idx, key in enumerate(levels.keys()):
+    for idx, key in enumerate(sorted(levels.keys())):
         intermediary_array[idx, 0] = levels[key]['price']
         intermediary_array[idx, 1] = levels[key]['size']
         intermediary_array[idx, 2] = levels[key]['is_buy']
@@ -158,8 +158,10 @@ def convert_dict_to_arr(levels: dict):
 @numba.njit(cache=True, fastmath=True)
 def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
     levels = {}
-
+    flag = False
     for idx, row in enumerate(arr):
+        if idx % 1000000 == 0:
+            print(f"Processing row {idx}, length of levels: {len(levels)}")
         #print(len(row))
         price = row[2]
         size = row[3]
@@ -243,10 +245,13 @@ def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
                 del levels[max_key]
 
         if len(levels) == 64:
+            if flag is False:
+                start_idx = idx
+                flag = True
             #print(f"Snapshot {idx}")
             snapshots[idx] = convert_dict_to_arr(levels)
     
-    return snapshots
+    return snapshots, start_idx
 
 def center_ob_slices(data: pd.DataFrame, target_depth: int):
     """
@@ -288,7 +293,6 @@ def center_ob_slices(data: pd.DataFrame, target_depth: int):
     
     #return sliced_data
     return data
-
 
 def map_order_type(update_type: str) -> np.int64:
     if update_type == 'ADD':
@@ -344,9 +348,18 @@ if __name__ == "__main__":
     print(raw_data[0, :])
     #exit()
     results = np.zeros((len(raw_data), depth, 3), dtype=np.int64)
-    ob_state = nb_build_order_book_snapshots(raw_data, results)
-    
-    np.save("test.npy", ob_state)
+    ob_state, start_idx = nb_build_order_book_snapshots(raw_data, results)
+    ob_state = ob_state[start_idx+1:]
+    ob_state = ob_state/1e7
+    ob_state = ob_state[:, :, :-1]
+    #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
+    ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)
+    #print(f"bf16 {ob_state_bf16[-1, :, :]}")
+    print(f"fp32 {ob_state[-1, :, :]}")
+    print(f"fp32 {ob_state[0, :, :]}")
+    torch.save(ob_state, "test.pt")
+
+    #np.save("test.npy", ob_state)
 
     #sorted_levels = sorted(ob_state[-1].keys())
     #print(ob_state[-1])

@@ -1,4 +1,5 @@
 import torch
+from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 
 class SmallFCModel(torch.nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
@@ -260,7 +261,7 @@ class ShallowLSTMModel(torch.nn.Module):
         self.temporal_dim = input_shape[0]
         self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
-        self.lstm = torch.nn.RNN(self.features_dim*self.depth_dim, hidden_size = 512, batch_first=True, dropout=dropout, num_layers=8)
+        self.lstm = torch.nn.RNN(self.features_dim*self.depth_dim, hidden_size = 512, batch_first=True, dropout=dropout, num_layers=12)
         self.fc1 = torch.nn.Linear(512, self.features_dim*self.depth_dim)
 
 
@@ -294,6 +295,33 @@ class TinyLSTMModel(torch.nn.Module):
         x, _ = self.lstm(x)
         #x = x.view(-1, 2048)
         x = self.fc1(x)
+        x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        return x
+    
+class TinyTransformerModel(torch.nn.Module):
+    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
+        super().__init__()
+        self.depth_dim = input_shape[1]
+        self.features_dim = input_shape[2]
+        self.temporal_dim = input_shape[0]
+        self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim)).cuda()
+        self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_dim*self.depth_dim, nhead=8, dim_feedforward=2048, dropout=dropout, batch_first=True)
+        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=24)
+
+
+    def forward(self, x: torch.Tensor):
+        #x = x.view(-1, self.inputs_shape)
+        #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
+        x = x.view(-1, self.temporal_dim, self.features_dim* self.depth_dim)
+        x = self.positional_encoder(x)
+        #print(f"Shape after positional encoding: {x.shape}")
+        x = self.transformer(x)
+        #x = x.view(-1, 2048)
+        #print(f"Shape after transformer: {x.shape}")
+        #x = self.fc1(x)
         x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x

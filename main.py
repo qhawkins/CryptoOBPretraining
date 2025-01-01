@@ -7,7 +7,7 @@ import numpy as np
 from ray import train, tune
 from training_classes import CombinedNanPlateauStopper, PretrainingDataset
 import ray
-from models import SmallFCModel, MediumFCModel, LargeFCModel, ShallowLSTMModel, DeepLSTMModel, TinyLSTMModel
+from models import SmallFCModel, MediumFCModel, LargeFCModel, ShallowLSTMModel, DeepLSTMModel, TinyLSTMModel, TinyTransformerModel
 from torch.masked import MaskedTensor
 
 def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, device='cuda'):
@@ -60,6 +60,9 @@ class Trainer:
         elif self.config['model_size'] == 'tiny_lstm':
             self.model = TinyLSTMModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
 
+        elif self.config['model_size'] == 'tiny_transformer':
+            self.model = TinyTransformerModel((self.temporal_dim, self.depth_dim, 2), (self.temporal_dim, self.depth_dim, 2), self.dropout).to('cuda')
+
         #compiling
         self.model = torch.compile(self.model)
 
@@ -95,7 +98,8 @@ class Trainer:
         self.early_stopping_patience = self.config['early_stopping_patience']
         self.saved_models = deque(maxlen=self.early_stopping_patience+1)
         self.best_val_loss = float('inf')
-        self.best_model_path = self.config['best_model_path']        
+        self.best_model_path = self.config['best_model_path']
+        self.step_losses = []      
 
     def save_model(self, epoch, val_loss):
         model_path = f"/media/qhawkins/SSD3/ray_models/{self.model_name}_val_loss_{str(round(val_loss, 8)).replace('.', '')}_epoch_{epoch}_{self.config['loss']}_{self.config['model_size']}.pth"
@@ -104,7 +108,8 @@ class Trainer:
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'val_loss': val_loss,
-            'loss_function': self.config['loss']
+            'loss_function': self.config['loss'],
+            "step_losses": self.step_losses
         }, model_path)
         self.saved_models.append((model_path, val_loss))
         
@@ -142,7 +147,7 @@ class Trainer:
             self.model.train()
             avg_train_loss = 0
             avg_val_loss = 0
-
+            self.step_losses = []
             for i, data in enumerate(self.train_dataloader):
                 # Assuming data shape: (batch_size, seq_length, features)
                 # No need for separate labels in MLM; labels are derived from inputs
@@ -173,6 +178,7 @@ class Trainer:
                 self.scaler.update()
 
                 avg_train_loss += loss.item()
+                self.step_losses.append(loss.item())
 
             avg_train_loss /= (i + 1)
 
@@ -286,9 +292,9 @@ if __name__ == '__main__':
         'dropout': tune.choice([0.1, 0.15, 0.25, 0.5]),
         'optimizer': tune.choice(['adam', 'adamw']),
         'lr': tune.uniform(1e-6, 1e-3),
-        'batch_size': tune.choice([2048, 4096]),
+        'batch_size': tune.choice([512]),
         'loss': tune.choice(['mse']),#,'mae', 'huber']),
-        "model_size": tune.choice(["shallow_lstm", "deep_lstm", "tiny_lstm", "small", "medium", "large"]),
+        "model_size": tune.choice(["tiny_transformer"]),
         'temporal_dim': 128,
         'mask_perc': tune.choice([0.15, 0.25, 0.35]),
         'depth_dim': 64

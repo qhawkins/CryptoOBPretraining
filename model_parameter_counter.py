@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from models import SmallFCModel, MediumFCModel, LargeFCModel, TinyLSTMModel, DeepLSTMModel, ShallowLSTMModel
+from models import SmallFCModel, MediumFCModel, LargeFCModel, TinyLSTMModel, DeepLSTMModel, ShallowLSTMModel, TinyTransformerModel
 
 def count_parameters(model: torch.nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -13,9 +13,11 @@ if __name__ == "__main__":
     tiny_lstm = TinyLSTMModel((128, 128, 2), (128, 128, 2), 0.25)
     small_lstm = ShallowLSTMModel((128, 128, 2), (128, 128, 2), 0.25)
     deep_lstm = DeepLSTMModel((128, 128, 2), (128, 128, 2), 0.25)
+    tiny_transformer = TinyTransformerModel((192, 64, 2), (192, 64, 2), 0.25)
     #print(f"Small model has {count_parameters(small)/1e6} M parameters")
     #print(f"Medium model has {count_parameters(medium)/1e6} M parameters")
     #print(f"Large model has {count_parameters(large)/1e6} M parameters")
     print(f"Tiny LSTM model has {count_parameters(tiny_lstm)/1e6} M parameters")
     print(f"Shallow LSTM model has {count_parameters(small_lstm)/1e6} M parameters")
     print(f"Deep LSTM model has {count_parameters(deep_lstm)/1e6} M parameters")
+    print(f"Tiny Transformer model has {count_parameters(tiny_transformer)/1e6} M parameters")
