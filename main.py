@@ -26,13 +26,14 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
         mask (torch.Tensor): Boolean mask indicating which entries were masked.
     """
     # Generate a mask for 15% of the entries
-    mask = torch.rand(inputs.shape, device=device) < mask_percentage
+    mask = torch.rand(inputs.shape, device=device, requires_grad=False, dtype=torch.bfloat16) < mask_percentage
+    mask = mask.to('cuda')
 
     # Replace masked entries in inputs with mask_value
     masked_inputs = inputs.clone()
     masked_inputs[mask] = mask_value
 
-    return masked_inputs.cuda(), mask
+    return masked_inputs, mask
 
 class Trainer:
     def __init__(self, config):
@@ -85,7 +86,7 @@ class Trainer:
         elif self.config['optimizer'] == 'adamw':
             self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.config['lr'])
 
-        self.data = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test.npy")
+        self.data = torch.load("/home/qhawkins/Desktop/CryptoOBPretraining/test.pt")
         self.model_name = self.config["model_name"]
         self.train_loss_history = []
         self.val_loss_history = []
@@ -152,6 +153,7 @@ class Trainer:
                 # Assuming data shape: (batch_size, seq_length, features)
                 # No need for separate labels in MLM; labels are derived from inputs
                 #print(f"Initial data nan count: {torch.isnan(data).sum()}")
+                data = data.cuda()
                 masked_inputs, mask = apply_mask(
                     data,
                     mask_percentage=self.mask_perc,
@@ -163,7 +165,6 @@ class Trainer:
                 self.optimizer.zero_grad()
 
                 with torch.amp.autocast(device_type='cuda'):
-                    data = data.cuda()
                     #print(50*"=-")
                     #print(data.shape)
                     outputs = self.model(masked_inputs)  # Shape: (batch_size, seq_length -1, features)

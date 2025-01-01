@@ -20,7 +20,6 @@ def normalize_data(data: torch.Tensor):
     data[:, :, 0] = normalize_slice(data[:, :, 0])
     data[:, :, 1] = normalize_slice(data[:, :, 1])
     #data[:, :, 2] = normalize_slice(data[:, :, 2])
-    data = data[:, :, :-1]
 
     return data
 
@@ -87,7 +86,7 @@ class LossIncreaseStopper(Stopper):
 
 class PretrainingDataset(Dataset):
     def __init__(self, data: np.dtype, temporal_offset: int = 512):
-        self.data = torch.tensor(data, dtype=torch.float32)
+        self.data = data
         self.offset = temporal_offset
         self.length = len(data)-self.offset
         print(f"PretrainingDataset initialized with {self.length} rows on {'cuda'}")

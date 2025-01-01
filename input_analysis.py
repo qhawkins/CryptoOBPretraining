@@ -32,8 +32,15 @@ print(inputs.shape)
 print(torch.mean(inputs[:, :, 0]))
 print(torch.mean(inputs[:, :, 1]))
 
-print(inputs[0, :, 0]*100)
-print(inputs[0, :, 1]*100)
+print(inputs[0, :, 0])
+print(inputs[0, :, 1])
+
+#inputs = torch.tensor(inputs*10, dtype=torch.bfloat16)
+
+#print(inputs[0, :, 0])
+#print(inputs[0, :, 1])
+
+
 normalized = normalize_data(inputs)
 print(torch.mean(normalized[:, :, 0]))
 print(torch.mean(normalized[:, :, 1]))
