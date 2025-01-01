@@ -13,7 +13,7 @@ if __name__ == "__main__":
     tiny_lstm = TinyLSTMModel((128, 128, 2), (128, 128, 2), 0.25)
     small_lstm = ShallowLSTMModel((128, 128, 2), (128, 128, 2), 0.25)
     deep_lstm = DeepLSTMModel((128, 128, 2), (128, 128, 2), 0.25)
-    tiny_transformer = TinyTransformerModel((192, 64, 2), (192, 64, 2), 0.25)
+    tiny_transformer = TinyTransformerModel((128, 64, 2), (128, 64, 2), 0.25)
     #print(f"Small model has {count_parameters(small)/1e6} M parameters")
     #print(f"Medium model has {count_parameters(medium)/1e6} M parameters")
     #print(f"Large model has {count_parameters(large)/1e6} M parameters")

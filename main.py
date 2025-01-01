@@ -131,9 +131,9 @@ class Trainer:
         self.val_ds = PretrainingDataset(self.data[train_size:train_size+val_size], self.temporal_dim)
         self.test_ds = PretrainingDataset(self.data[:test_size], self.temporal_dim)
 
-        self.train_dataloader = DataLoader(self.train_ds, batch_size=self.config['batch_size'], shuffle=True, drop_last=True, num_workers=6, prefetch_factor=4, pin_memory=True)
-        self.val_dataloader = DataLoader(self.val_ds, batch_size=self.config['batch_size'], shuffle=False, drop_last=True, num_workers=6, prefetch_factor=4, pin_memory=True)
-        self.test_dataloader = DataLoader(self.test_ds, batch_size=self.config['batch_size'], shuffle=False, drop_last=True, num_workers=6, prefetch_factor=4, pin_memory=True)
+        self.train_dataloader = DataLoader(self.train_ds, batch_size=self.config['batch_size'], shuffle=True, drop_last=True, num_workers=5, pin_memory=True)
+        self.val_dataloader = DataLoader(self.val_ds, batch_size=self.config['batch_size'], shuffle=False, drop_last=True, num_workers=5, pin_memory=True)
+        self.test_dataloader = DataLoader(self.test_ds, batch_size=self.config['batch_size'], shuffle=False, drop_last=True, num_workers=5, pin_memory=True)
 
     def print_model_params(self):
         print(f"Model: {self.model_name}")
@@ -292,7 +292,7 @@ if __name__ == '__main__':
         'best_model_path': "best_model.pth",
         'dropout': tune.choice([0.1, 0.15, 0.25, 0.5]),
         'optimizer': tune.choice(['adam', 'adamw']),
-        'lr': tune.uniform(1e-6, 1e-3),
+        'lr': tune.uniform(1e-4, 5e-3),
         'batch_size': tune.choice([512]),
         'loss': tune.choice(['mse']),#,'mae', 'huber']),
         "model_size": tune.choice(["tiny_transformer"]),
