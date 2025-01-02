@@ -165,8 +165,8 @@ def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
         #print(len(row))
         price = row[2]
         size = row[3]
-        update_type = row[0]
-        is_buy = row[1]
+        update_type = int(row[0])
+        is_buy = int(row[1])
         if price in levels:            
             # Apply update type logic
             if update_type == 0:
@@ -317,14 +317,14 @@ def map_order_type(update_type: str) -> np.int64:
 
 if __name__ == "__main__":
     depth = 64
-    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201_fragment.csv", engine="pyarrow")
+    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow")
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
     #exit()
     #the start of the first order book snapshot is the first row of the data that doesnt have an update type of snapshot
     #starting_ob_state = raw_data.loc[raw_data["update_type"] != "snapshot"].index[0]
-    raw_data['time_exchange_int'] = raw_data['time_exchange'].apply(lambda x: int(x.timestamp()*1000))
-    raw_data['time_coinapi_int'] = raw_data['time_coinapi'].apply(lambda x: int(x.timestamp()*1000))
+    #raw_data['time_exchange_int'] = raw_data['time_exchange'].apply(lambda x: int(x.timestamp()*1000))
+    #raw_data['time_coinapi_int'] = raw_data['time_coinapi'].apply(lambda x: int(x.timestamp()*1000))
 
     #raw_data.set_index("time_coinapi_int", inplace=True)
 
@@ -332,32 +332,30 @@ if __name__ == "__main__":
 
     print(raw_data.describe())
 
-    raw_data.rename(columns={"time_exchange_int": "time_exchange", "time_coinapi_int": "time_coinapi"}, inplace=True)
+    #raw_data.rename(columns={"time_exchange_int": "time_exchange", "time_coinapi_int": "time_coinapi"}, inplace=True)
 
     raw_data['update_type'] = raw_data['update_type'].apply(map_order_type)
     raw_data['is_buy'] = raw_data['is_buy'].apply(lambda x: 1 if x else 0)
-    raw_data['entry_px'] = (raw_data['entry_px']*1e9).astype(np.int64)
-    raw_data['entry_sx'] = (raw_data['entry_sx']*1e9).astype(np.int64)
+    raw_data['entry_px'] = (raw_data['entry_px']).astype(np.float32)
+    raw_data['entry_sx'] = (raw_data['entry_sx']).astype(np.float32)
 
-    print(raw_data.info())
-    #exit()
 
-    raw_data = raw_data.to_numpy(dtype=np.int64)
-    raw_data = raw_data[:, :4]
+    raw_data = raw_data.to_numpy(dtype=np.float32)
+    #raw_data = raw_data[:, :4]
     print(raw_data.shape)
     print(raw_data[0, :])
     #exit()
     results = np.zeros((len(raw_data), depth, 3), dtype=np.int64)
     ob_state, start_idx = nb_build_order_book_snapshots(raw_data, results)
     ob_state = ob_state[start_idx+1:]
-    ob_state = ob_state/1e7
+    #ob_state = ob_state/1e7
     ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
     ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)
     #print(f"bf16 {ob_state_bf16[-1, :, :]}")
     print(f"fp32 {ob_state[-1, :, :]}")
     print(f"fp32 {ob_state[0, :, :]}")
-    torch.save(ob_state, "test.pt")
+    torch.save(ob_state, "full_parsed.pt")
 
     #np.save("test.npy", ob_state)
 
