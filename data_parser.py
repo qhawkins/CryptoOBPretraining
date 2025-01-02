@@ -148,11 +148,10 @@ def build_order_book_snapshots(df: pd.DataFrame):
 
 @numba.njit(cache=True, fastmath=True)
 def convert_dict_to_arr(levels: dict):
-    intermediary_array = np.zeros((len(levels), 3), dtype=np.int64)
+    intermediary_array = np.zeros((len(levels), 2), dtype=np.float32)
     for idx, key in enumerate(sorted(levels.keys())):
         intermediary_array[idx, 0] = levels[key]['price']
         intermediary_array[idx, 1] = levels[key]['size']
-        intermediary_array[idx, 2] = levels[key]['is_buy']
     return intermediary_array
 
 @numba.njit(cache=True, fastmath=True)
@@ -345,7 +344,7 @@ if __name__ == "__main__":
     print(raw_data.shape)
     print(raw_data[0, :])
     #exit()
-    results = np.zeros((len(raw_data), depth, 3), dtype=np.int64)
+    results = np.zeros((len(raw_data), depth, 2), dtype=np.float32)
     ob_state, start_idx = nb_build_order_book_snapshots(raw_data, results)
     ob_state = ob_state[start_idx+1:]
     #ob_state = ob_state/1e7
