@@ -7,291 +7,124 @@ import pandas as pd
 from copy import deepcopy
 import numba
 
-def build_order_book_snapshots(df: pd.DataFrame):
+@numba.njit(cache=True)
+def find_price_index(prices, price):
     """
-    Builds a list of order book snapshots from the given DataFrame.
-    Each row in `df` represents one update to the order book.
-    
-    :param df: A pandas DataFrame with columns:
-               ['time_exchange', 'time_api', 'update_type',
-                'is_buy', 'entry_px', 'entry_sz']
-    :return: A list of dictionaries, where each dictionary represents
-             the state of the order book after applying a single row's update.
+    Linear search to find the index of a given price.
+    Returns the index if found, else -1.
     """
-    
-    # We store order book levels in a dictionary:
-    #   levels[price] = {
-    #       'price'         : float,
-    #       'size'          : float,
-    #       'is_buy'        : bool,
-    #       'time_exchange' : float or datetime,
-    #       'time_api'      : float or datetime
-    #   }
-    levels = {}
-    
-    # List to store a "snapshot" (deep copy) of the order book after each update.
-    snapshots = []
-    
-    # Iterate over rows; each row is an update event
-    for idx, row in df.iterrows():
-        print(f"Processing row {idx}, length of levels: {len(levels)}")
-        price = row['entry_px']
-        size = row['entry_sx']
-        update_type = row['update_type']
-        #current_time = row['time_coinapi']
-        #print(f"Price: {price}, Size: {size}, Update Type: {update_type}, Current Time: {current_time}, ")
-        #for key in levels.keys():
-        #    levels[key]['time_since_last_update'] = current_time - levels[key]['time_coinapi'] + 1
-        
-        # If this price level already exists in the order book:
-        if price in levels:
-            # Update the timestamps
-            levels[price]['time_exchange'] = row['time_exchange']
-            levels[price]['time_coinapi'] = row['time_coinapi']
-            #levels[price]['time_since_last_update'] = current_time - levels[price]['time_coinapi'] + 1
-            
-            # Apply update type logic
-            if update_type == 'ADD':
-                # ADD means increment the size
-                levels[price]['size'] += size
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 'SUB':
-                # SUB means decrement the size
-                levels[price]['size'] -= size
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 'MATCH':
-                # MATCH also means decrement the size
-                levels[price]['size'] -= size
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 'SET':
-                # SET means overwrite the size and set is_buy
-                levels[price]['size'] = size
-                levels[price]['is_buy'] = bool(row['is_buy'])
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 'DELETE':
-                # DELETE means remove the price level entirely
-                del levels[price]
-                
-            elif update_type == 'SNAPSHOT':
-                # SNAPSHOT: first set the existing level's size,
-                # then create a new level object and assign it.
-                
-                # 1) Overwrite existing size
-                levels[price]['size'] = size
-                levels[price]['is_buy'] = bool(row['is_buy'])
-                
-                # 2) Create a new level from scratch and assign
-                new_level = {
-                    'price': row['entry_px'],
-                    'size': size,
-                    'is_buy': bool(row['is_buy']),
-                    'time_exchange': row['time_exchange'],
-                    'time_coinapi': row['time_coinapi'],
-                    #'time_since_last_update': 1
-                }
-                levels[price] = new_level
-                continue
-                
-            else:
-                # Unknown update type (optional: handle error/logging)
-                pass
-                
-        else:
-            # If this price level does not exist in the book:
-            # We create a brand-new level and insert it
-            new_level = {
-                'price': price,
-                'size': size,
-                'is_buy': bool(row['is_buy']),
-                'time_exchange': row['time_exchange'],
-                'time_coinapi': row['time_coinapi'],
-                #'time_since_last_update': 1
-            }
-            levels[price] = new_level
+    for i in range(len(prices)):
+        if prices[i] == price:
+            return i
+    return -1
 
-        # If the number of levels exceeds 256, find the target index to remove
-        # to do this, find the mid price and if the remove the key that is farthest from the mid price
-        # to find the mid price, find the index where the is_buy column converts from True to False, making sure that the levels are ordered by price (in ascending order)
+@numba.njit(cache=True)
+def find_min_price_index(prices):
+    """
+    Find the index of the minimum price.
+    """
+    min_idx = 0
+    for i in range(len(prices)):
+        if prices[i] < prices[min_idx]:
+            min_idx = i
+    return min_idx
 
-        if len(levels) > 64:
-            count_of_is_buy = sum([1 for key in levels.keys() if levels[key]['is_buy']])
-            count_of_is_sell = sum([1 for key in levels.keys() if not levels[key]['is_buy']])
-            sorted_keys = sorted(levels.keys())
-            if count_of_is_buy > count_of_is_sell:
-                min_key = min(sorted_keys)
-                del levels[min_key]
-            else:
-                max_key = max(sorted_keys)
-                del levels[max_key]
+@numba.njit(cache=True)
+def find_max_price_index(prices):
+    """
+    Find the index of the maximum price.
+    """
+    max_idx = 0
+    for i in range(len(prices)):
+        if prices[i] > prices[max_idx]:
+            max_idx = i
+    return max_idx
 
-            #min_key = min(levels.keys())
-            #max_key = max(levels.keys())
-            #mid_price = find_mid(levels)
-            #distance_to_min = abs(mid_price - min_key)
-            #distance_to_max = abs(mid_price - max_key)
-            #if distance_to_min > distance_to_max:
-            #    del levels[min_key]
-            #else:
-            #    del levels[max_key]
+@numba.njit(cache=True)
+def sort_levels(levels: np.array)-> np.array:
+    return levels[np.argsort(levels[:, 0])]
 
-            #print(f"Count of is_buy: {sum([1 for key in levels.keys() if levels[key]['is_buy']])}")
-            #print(f"Deleted key: {min_key if distance_to_min > distance_to_max else max_key}, Mid price: {mid_price}, Distance to min: {distance_to_min}, Distance to max: {distance_to_max}")
 
-        if len(levels) == 64:
-            snapshots.append(pd.DataFrame.from_dict(deepcopy(levels), orient='index').drop(columns=["time_exchange", "time_coinapi"]).sort_values(by="price", ascending=True).reset_index(drop=True))
-    
-    return snapshots
-
-@numba.njit(cache=True, fastmath=True)
-def convert_dict_to_arr(levels: dict):
-    intermediary_array = np.zeros((len(levels), 2), dtype=np.float32)
-    for idx, key in enumerate(sorted(levels.keys())):
-        intermediary_array[idx, 0] = levels[key]['price']
-        intermediary_array[idx, 1] = levels[key]['size']
-    return intermediary_array
-
-@numba.njit(cache=True, fastmath=True)
-def nb_build_order_book_snapshots(arr: np.array, snapshots: np.array):
-    levels = {}
+@numba.njit(cache=True)
+def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128):
     flag = False
+    is_buy_sum = 0
+    is_sell_sum = 0
+    #levels is price, size, is_buy
+    levels = np.zeros((max_size, 3), dtype=np.float32)
+    n_levels = 0
+
+    #find_max_price_index
+    #find_min_price_index
+    #find_price_index
+
     for idx, row in enumerate(arr):
         if idx % 1000000 == 0:
             print(f"Processing row {idx}, length of levels: {len(levels)}")
-        #print(len(row))
         price = row[2]
         size = row[3]
-        update_type = int(row[0])
-        is_buy = int(row[1])
-        if price in levels:            
-            # Apply update type logic
-            if update_type == 0:
-                # ADD means increment the size
-                levels[price]['size'] += size
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 1:
-                # SUB means decrement the size
-                levels[price]['size'] -= size
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 2:
-                # MATCH also means decrement the size
-                levels[price]['size'] -= size
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 3:
-                # SET means overwrite the size and set is_buy
-                levels[price]['size'] = size
-                levels[price]['is_buy'] = is_buy
-                #levels[price]['time_since_last_update'] = 1
-                
-            elif update_type == 4:
-                # DELETE means remove the price level entirely
-                del levels[price]
-                
-            elif update_type == 5:
-                # SNAPSHOT: first set the existing level's size,
-                # then create a new level object and assign it.
-                
-                # 1) Overwrite existing size
-                levels[price]['size'] = size
-                levels[price]['is_buy'] = is_buy
-                
-                # 2) Create a new level from scratch and assign
-                new_level = {
-                    'price': price,
-                    'size': size,
-                    'is_buy': is_buy,
-                    #'time_since_last_update': 1
-                }
-                levels[price] = new_level
-                continue
-                
+        update_type = row[0]
+        is_buy = row[1]
+        price_in_levels = find_price_index(levels[:, 0], price)
+        if price_in_levels != -1:
+            if update_type == 5.0:
+                levels[price_in_levels][0] = price
+                levels[price_in_levels][1] = size
+                levels[price_in_levels][2] = is_buy
+            elif update_type == 0.0:
+                levels[price_in_levels][1] += size
+            elif update_type == 1.0:
+                levels[price_in_levels][1] -= size
+            elif update_type == 2.0:
+                levels[price_in_levels][1] -= size
+            elif update_type == 3.0:
+                levels[price_in_levels][0] = price
+                levels[price_in_levels][1] = size
+                levels[price_in_levels][2] = is_buy
+            elif update_type == 4.0:
+                levels[price_in_levels][0] = 0
+                levels[price_in_levels][1] = 0
+                levels[price_in_levels][2] = 0
             else:
-                # Unknown update type (optional: handle error/logging)
-                pass
-                
+                levels[price_in_levels][0] = price
+                levels[price_in_levels][1] = size
+                levels[price_in_levels][2] = is_buy
+            levels = sort_levels(levels)
         else:
-            # If this price level does not exist in the book:
-            # We create a brand-new level and insert it
-            #print("Creating new level")
-            new_level = {
-                'price': price,
-                'size': size,
-                'is_buy': is_buy,
-                #'time_since_last_update': 1
-            }
-            levels[price] = new_level
-
-        # If the number of levels exceeds 256, find the target index to remove
-        # to do this, find the mid price and if the remove the key that is farthest from the mid price
-        # to find the mid price, find the index where the is_buy column converts from True to False, making sure that the levels are ordered by price (in ascending order)
-
-        if len(levels) > 64:
-            #print("Excess length")
-            count_of_is_buy = sum([1 for key in levels.keys() if levels[key]['is_buy']])
-            count_of_is_sell = sum([1 for key in levels.keys() if not levels[key]['is_buy']])
-            sorted_keys = sorted(levels.keys())
-            if count_of_is_buy > count_of_is_sell:
-                min_key = min(sorted_keys)
-                del levels[min_key]
+            levels = sort_levels(levels)
+            num_buys = np.sum(levels[:, 2])
+            num_sells = max_size - num_buys
+            if n_levels < max_size:
+                levels[0] = [price, size, is_buy]
+                n_levels += 1
             else:
-                max_key = max(sorted_keys)
-                del levels[max_key]
+                if num_buys > num_sells:
+                    min_idx = find_min_price_index(levels[:, 0])
+                    levels[min_idx] = [price, size, is_buy]
 
-        if len(levels) == 64:
+                elif num_sells > num_buys:
+                    max_idx = find_max_price_index(levels[:, 0])
+                    levels[max_idx] = [price, size, is_buy]
+                else:
+                    #find mid price
+                    mid_price = (levels[max_size//2][0] + levels[max_size//2 + 1][0])/2
+                    max_distance_from_mid = levels[find_max_price_index(levels[:, 0])][0] - mid_price
+                    min_distance_from_mid = mid_price - levels[find_min_price_index(levels[:, 0])][0]
+                    if max_distance_from_mid > min_distance_from_mid:
+                        max_idx = find_max_price_index(levels[:, 0])
+                        levels[max_idx] = [price, size, is_buy]
+                    else:
+                        min_idx = find_min_price_index(levels[:, 0])
+                        levels[min_idx] = [price, size, is_buy]
+
+                    
+        if n_levels == max_size:
             if flag is False:
                 start_idx = idx
                 flag = True
-            #print(f"Snapshot {idx}")
-            snapshots[idx] = convert_dict_to_arr(levels)
-    
+            snapshots[idx] = levels[:, :2]
     return snapshots, start_idx
-
-def center_ob_slices(data: pd.DataFrame, target_depth: int):
-    """
-    Center the order book slices around the target depth.
-    If the target depth is 5, the output will be a slice of the order book
-    with 5 levels on each side of the target depth.
-    
-    :param data: A pandas DataFrame with columns:
-                 ['price', 'size', 'is_buy', 'time_since_last_update']
-    :param target_depth: The target depth to center the slices around
-    :return: A pandas DataFrame with columns:
-             ['price', 'size', 'is_buy', 'time_since_last_update']
-    """
-    len_data = len(data)
-
-    # find the index where the is_buy column converts from True to False
-    target_idx = data[data['is_buy'] == False].index[0]
-    data['is_buy'] = data['is_buy'].apply(lambda x: 1 if x else 0).astype(np.int64)
-    data['price'] = (data['price']*1e9).astype(np.int64)
-    data['size'] = (data['size']*1e9).astype(np.int64)
-    #data['time_since_last_update'] = data['time_since_last_update'].astype(np.int64)
-    data = data.to_numpy(dtype=np.int64)
-    
-    ## Calculate the start and end indices for the slice
-    #start_idx = target_idx - target_depth/2
-    #end_idx = target_idx + target_depth/2
-    
-    # If the slice is out of bounds, add padding to the start and/or end
-    #if start_idx < 0:
-    #    padding_needed = int(abs(start_idx))
-    #    start_idx = 0
-    #    beginning_padding = np.zeros((padding_needed, 3), dtype=np.int64)
-    #    data = np.vstack((beginning_padding, data))
-    #if end_idx > len_data:
-    #    padding_needed = int(end_idx - len_data)
-    #    ending_padding = np.zeros((padding_needed, 3), dtype=np.int64)
-    #    data = np.vstack((data, ending_padding))
-    #sliced_data = data[int(start_idx):int(start_idx+target_depth)]
-    
-    #return sliced_data
-    return data
+            
 
 def map_order_type(update_type: str) -> np.int64:
     if update_type == 'ADD':
@@ -315,8 +148,8 @@ def map_order_type(update_type: str) -> np.int64:
         raise ValueError(f"Unknown update type: {update_type}")
 
 if __name__ == "__main__":
-    depth = 64
-    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow")
+    depth = 128
+    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201_fragment.csv", engine="pyarrow")
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
     #exit()
@@ -340,21 +173,24 @@ if __name__ == "__main__":
 
 
     raw_data = raw_data.to_numpy(dtype=np.float32)
+    #raw_data = raw_data[:10000, :]
     #raw_data = raw_data[:, :4]
     print(raw_data.shape)
     print(raw_data[0, :])
     #exit()
-    results = np.zeros((len(raw_data), depth, 2), dtype=np.float32)
-    ob_state, start_idx = nb_build_order_book_snapshots(raw_data, results)
+    results = np.zeros((len(raw_data), depth, 2), dtype=np.float32, order="C")
+    ob_state, start_idx = optimized_order_book(raw_data, results, depth)
     ob_state = ob_state[start_idx+1:]
     #ob_state = ob_state/1e7
-    ob_state = ob_state[:, :, :-1]
+    #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
-    ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)
+    
+    np.save("full_parsed.npy", ob_state)
+    #ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)
     #print(f"bf16 {ob_state_bf16[-1, :, :]}")
     print(f"fp32 {ob_state[-1, :, :]}")
     print(f"fp32 {ob_state[0, :, :]}")
-    torch.save(ob_state, "full_parsed.pt")
+    #torch.save(ob_state, "full_parsed.pt")
 
     #np.save("test.npy", ob_state)
 

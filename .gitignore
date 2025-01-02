@@ -1,3 +1,5 @@
 test.npy
 /__pycache__
 test.pt
+full_parsed.pt
+full_parsed.npy
