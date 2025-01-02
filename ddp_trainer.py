@@ -34,7 +34,7 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 	"""
 	# Generate a mask for 15% of the entries
 	mask = torch.rand(inputs.shape, device=device, requires_grad=False, dtype=torch.bfloat16) < mask_percentage
-	mask = mask.to(device)
+	mask = mask.to(device, non_blocking=True)
 	
 	# Replace masked entries in inputs with mask_value
 	masked_inputs = inputs.clone()
@@ -152,7 +152,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=5,
 			pin_memory=True
 		)
 		
@@ -161,7 +161,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.val_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=5,
 			pin_memory=True
 		)
 		
@@ -248,7 +248,7 @@ class Trainer:
 			self.step_losses = []
 
 			for i, data in enumerate(self.train_dataloader):
-				data = data.to(self.device)
+				data = data.to(self.device, non_blocking=True)
 				masked_inputs, mask = apply_mask(
 					data,
 					mask_percentage=self.config['mask_perc'],
@@ -276,7 +276,7 @@ class Trainer:
 			avg_val_loss = 0
 			with torch.no_grad():
 				for i, data in enumerate(self.val_dataloader):
-					data = data.to(self.device)
+					data = data.to(self.device, non_blocking=True)
 					masked_inputs, mask = apply_mask(
 						data,
 						mask_percentage=self.config['mask_perc'],
@@ -420,7 +420,7 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 5e-4,  # Fixed or configurable as needed
-		'batch_size': 1024,  # Fixed value
+		'batch_size': 768,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
