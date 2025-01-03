@@ -2,6 +2,7 @@ from ray.tune.stopper import Stopper
 from torch.utils.data import Dataset
 import numpy as np
 import torch
+import os
 
 def normalize_slice(data: torch.Tensor):
 	mean = torch.mean(data)
@@ -85,33 +86,32 @@ class LossIncreaseStopper(Stopper):
 		return False
 
 class PretrainingDataset(Dataset):
-	def __init__(self, start_idx: int, end_idx: int, data_path: str, temporal_offset: int = 512):
-		self.data = np.load(data_path, mmap_mode="r")
+	def __init__(self, shared_dataset: torch.Tensor, start_idx: int, end_idx: int, temporal_offset: int = 512):
 		self.start_idx = start_idx
 		self.end_idx = end_idx
 		self.offset = temporal_offset
-		#self.length = len(self.data)-self.offset
 		self.length = self.end_idx - self.start_idx - self.offset
-		print(f"PretrainingDataset initialized with {self.length} rows on {'cuda'}")
+		self.data = shared_dataset
+
+		print(f"PretrainingDataset initialized with {self.length} rows on {'cuda'} in process {os.getpid()}.")
+
 	def __len__(self):
 		return self.length
-	
+
 	def __getitem__(self, idx):
 		if isinstance(idx, int):
 			if idx < 0 or idx >= self.length:
 				raise IndexError(f"Index {idx} is out of bounds for dataset with length {self.length}")
-			data_slice = torch.from_numpy(self.data[idx+self.start_idx:idx+self.start_idx+self.offset].copy())
+			data_slice = self.data[idx + self.start_idx : idx + self.start_idx + self.offset]
 			normalized = normalize_data(data_slice)
 			nan_count = torch.sum(torch.isnan(normalized))
-			#print(f"Shape of normalized slice {idx}:{idx+self.offset} is {normalized.shape}")
 			if nan_count > 0:
 				print(f"Found {nan_count} nans in slice {idx}")
 				print(normalized)
-				raise ValueError(f"Nans found in normalized slice with indices {idx}:{idx+self.offset}")
+				raise ValueError(f"Nans found in normalized slice with indices {idx}:{idx + self.offset}")
 			return normalized.pin_memory()
 		elif isinstance(idx, slice):
 			normalized = self.data[idx]
-			#print(f"Shape of normalized slice in slice {idx} is {normalized.shape}")
-			return normalized
+			return normalized.pin_memory()
 		else:
 			raise TypeError(f"Invalid index type: {type(idx)}. Expected int or slice.")

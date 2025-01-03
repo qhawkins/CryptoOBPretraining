@@ -148,8 +148,9 @@ def map_order_type(update_type: str) -> np.int64:
         raise ValueError(f"Unknown update type: {update_type}")
 
 if __name__ == "__main__":
-    depth = 128
-    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow")
+    depth = 96
+    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
+    #raw_data = raw_data.iloc
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
     #exit()
@@ -180,16 +181,21 @@ if __name__ == "__main__":
     #exit()
     results = np.zeros((len(raw_data), depth, 2), dtype=np.float32, order="C")
     ob_state, start_idx = optimized_order_book(raw_data, results, depth)
-    ob_state = ob_state[start_idx+1024:]
+    ob_state = ob_state[start_idx+1280000:]
+    print("Sliced")
+    #print(ob_state[-1, :, 0])
     #ob_state = ob_state/1e7
     #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
-    
     np.save("full_parsed.npy", ob_state)
+    
+    
+    
     #ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)
     #print(f"bf16 {ob_state_bf16[-1, :, :]}")
-    print(f"fp32 {ob_state[-1, :, :]}")
-    print(f"fp32 {ob_state[0, :, :]}")
+    for idx, entry in enumerate(ob_state[-1, :, :]):
+        print(f"Slice {idx}, price: {entry[0]}, size: {entry[1]}")
+    
     #torch.save(ob_state, "full_parsed.pt")
 
     #np.save("test.npy", ob_state)

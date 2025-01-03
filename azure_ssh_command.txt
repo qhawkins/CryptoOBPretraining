@@ -1,0 +1,1 @@
+ssh -i /home/qhawkins/Desktop/a100x4_key.pem azureuser@20.168.68.184

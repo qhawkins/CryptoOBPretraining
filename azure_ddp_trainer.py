@@ -228,7 +228,7 @@ class Trainer:
 			return  # Only the master process saves the model
 		
 		model_path = (
-			f"/media/qhawkins/SSD3/single_models/{self.model_name}_val_loss_"
+			f"/home/azureuser/single_models/{self.model_name}_val_loss_"
 			f"{str(round(val_loss, 8)).replace('.', '')}_epoch_{epoch}_"
 			f"{self.config['loss']}_{self.config['model_size']}.pth"
 		)
@@ -448,7 +448,7 @@ def main():
 	
 	torch.multiprocessing.set_sharing_strategy('file_descriptor')
     
-	dataset: np.array = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy")
+	dataset: np.array = np.load("/home/azureuser/data/full_parsed.npy")
 	dataset = torch.from_numpy(dataset)
 	shared_dataset = torch.Tensor.share_memory_(dataset)
 
@@ -462,3 +462,4 @@ def main():
 
 if __name__ == '__main__':
 	main()
+
