@@ -149,7 +149,7 @@ def map_order_type(update_type: str) -> np.int64:
 
 if __name__ == "__main__":
     depth = 128
-    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201_fragment.csv", engine="pyarrow")
+    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow")
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
     #exit()
@@ -180,7 +180,7 @@ if __name__ == "__main__":
     #exit()
     results = np.zeros((len(raw_data), depth, 2), dtype=np.float32, order="C")
     ob_state, start_idx = optimized_order_book(raw_data, results, depth)
-    ob_state = ob_state[start_idx+1:]
+    ob_state = ob_state[start_idx+1024:]
     #ob_state = ob_state/1e7
     #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)

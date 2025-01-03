@@ -298,7 +298,7 @@ if __name__ == '__main__':
         "model_size": tune.choice(["tiny_transformer"]),
         'temporal_dim': 128,
         'mask_perc': tune.choice([0.15, 0.25, 0.35]),
-        'depth_dim': 64
+        'depth_dim': 128
     }
 
     tuner = tune.Tuner(

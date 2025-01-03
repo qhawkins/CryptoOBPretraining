@@ -88,7 +88,7 @@ class Trainer:
 		).to(self.device)
 		
 		# Compile the model for potential performance benefits
-		self.model = torch.compile(self.model)
+		self.model = torch.compile(self.model, backend="cudagraphs")
 		
 		# Wrap the model with DDP
 		self.model = DDP(self.model, device_ids=[self.rank], find_unused_parameters=True, process_group=self.data_parallel_group)
@@ -119,7 +119,6 @@ class Trainer:
 		
 	def load_data(self):
 		# Load your dataset
-		self.data = torch.load("/home/qhawkins/Desktop/CryptoOBPretraining/test.pt")
 		
 		# Create dataset splits
 		self.split_data()
@@ -152,7 +151,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=5,
+			num_workers=0,
 			pin_memory=True
 		)
 		
@@ -161,7 +160,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.val_sampler,
 			drop_last=True,
-			num_workers=5,
+			num_workers=0,
 			pin_memory=True
 		)
 		
@@ -175,17 +174,28 @@ class Trainer:
 		)
 		
 	def split_data(self):
-		total_size = len(self.data)
+		total_size = len(np.load("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", mmap_mode="r"))
 		train_size = int(self.config['split_ratios'][0] * total_size)
 		val_size = int(self.config['split_ratios'][1] * total_size)
-		test_size = total_size - train_size - val_size
 		
-		self.train_ds = PretrainingDataset(self.data[:train_size], self.config['temporal_dim'])
-		self.val_ds = PretrainingDataset(
-			self.data[train_size:train_size + val_size],
+		self.train_ds = PretrainingDataset(
+			0, 
+			train_size, 
+			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", 
 			self.config['temporal_dim']
 		)
-		self.test_ds = PretrainingDataset(self.data[train_size + val_size:], self.config['temporal_dim'])
+		self.val_ds = PretrainingDataset(
+			train_size,
+			train_size + val_size,
+			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy",
+			self.config['temporal_dim']
+		)
+		self.test_ds = PretrainingDataset(
+			train_size + val_size, 
+			total_size, 
+			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", 
+			self.config['temporal_dim']
+		)
 		
 	def initialize_training_components(self):
 		self.model_name = self.config["model_name"]
@@ -420,12 +430,12 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 5e-4,  # Fixed or configurable as needed
-		'batch_size': 768,  # Fixed value
+		'batch_size': 512,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
-		'depth_dim': 64,
+		'depth_dim': 128,
 		'epochs': 100  # Define the number of epochs
 	}
 	
