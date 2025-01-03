@@ -152,7 +152,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=8,
 			pin_memory=True
 		)
 		
@@ -161,7 +161,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.val_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=8,
 			pin_memory=True
 		)
 		
@@ -170,7 +170,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.test_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=8,
 			pin_memory=True
 		)
 		
@@ -184,21 +184,18 @@ class Trainer:
 			self.shared_dataset,
 			0, 
 			train_size, 
-			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", 
 			self.config['temporal_dim']
 		)
 		self.val_ds = PretrainingDataset(
 			self.shared_dataset,
 			train_size,
 			train_size + val_size,
-			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy",
 			self.config['temporal_dim']
 		)
 		self.test_ds = PretrainingDataset(
 			self.shared_dataset,
 			train_size + val_size, 
 			total_size, 
-			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", 
 			self.config['temporal_dim']
 		)
 		
@@ -228,7 +225,7 @@ class Trainer:
 			return  # Only the master process saves the model
 		
 		model_path = (
-			f"/media/qhawkins/SSD3/single_models/{self.model_name}_val_loss_"
+			f"/home/azureuser/single_models/{self.model_name}_val_loss_"
 			f"{str(round(val_loss, 8)).replace('.', '')}_epoch_{epoch}_"
 			f"{self.config['loss']}_{self.config['model_size']}.pth"
 		)
@@ -435,7 +432,7 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 5e-4,  # Fixed or configurable as needed
-		'batch_size': 512,  # Fixed value
+		'batch_size': 2048,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
@@ -446,12 +443,15 @@ def main():
 	
 	setup_env_variables()
 	
-	torch.multiprocessing.set_sharing_strategy('file_descriptor')
+	torch.multiprocessing.set_sharing_strategy('file_system')
     
-	dataset: np.array = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy")
-	dataset = torch.from_numpy(dataset)
-	shared_dataset = torch.Tensor.share_memory_(dataset)
+	shared_dataset_len: np.array = np.load("/home/azureuser/data/full_parsed.npy", mmap_mode="r").shape[0]
+	#print("numpy loading finished")
+	#shared_dataset = torch.from_numpy(shared_dataset)
 
+	shared_dataset = torch.from_file("/home/azureuser/data/full_parsed.npy", dtype = torch.float32, shared=True, size=shared_dataset_len*config["depth_dim"]*2)
+	#shared_dataset.reshape((shared_dataset_len, config["depth_dim"], 2))
+	print("numpy converted to tensor")
 	# Spawn one process per GPU
 	torch.multiprocessing.spawn(
 		main_worker,

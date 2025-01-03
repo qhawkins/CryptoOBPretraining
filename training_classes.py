@@ -86,13 +86,15 @@ class LossIncreaseStopper(Stopper):
 		return False
 
 class PretrainingDataset(Dataset):
-	def __init__(self, shared_dataset: torch.Tensor, start_idx: int, end_idx: int, temporal_offset: int = 512):
+	 # Class-level variable to hold the memory map
+
+	def __init__(self, data: torch.Tensor, start_idx: int, end_idx: int, temporal_offset: int = 512):
 		self.start_idx = start_idx
 		self.end_idx = end_idx
 		self.offset = temporal_offset
 		self.length = self.end_idx - self.start_idx - self.offset
-		self.data = shared_dataset
-
+		self.data = data
+		self.dim_multiplier = 96*2
 		print(f"PretrainingDataset initialized with {self.length} rows on {'cuda'} in process {os.getpid()}.")
 
 	def __len__(self):
@@ -102,7 +104,7 @@ class PretrainingDataset(Dataset):
 		if isinstance(idx, int):
 			if idx < 0 or idx >= self.length:
 				raise IndexError(f"Index {idx} is out of bounds for dataset with length {self.length}")
-			data_slice = self.data[idx + self.start_idx : idx + self.start_idx + self.offset]
+			data_slice = self.data[(idx + self.start_idx)*self.dim_multiplier : (idx + self.start_idx + self.offset)*self.dim_multiplier].copy().view((self.temporal_offset, self.dim_multiplier/2, 2))
 			normalized = normalize_data(data_slice)
 			nan_count = torch.sum(torch.isnan(normalized))
 			if nan_count > 0:
@@ -112,6 +114,6 @@ class PretrainingDataset(Dataset):
 			return normalized.pin_memory()
 		elif isinstance(idx, slice):
 			normalized = self.data[idx]
-			return normalized.pin_memory()
+			return normalized
 		else:
 			raise TypeError(f"Invalid index type: {type(idx)}. Expected int or slice.")
