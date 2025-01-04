@@ -260,6 +260,8 @@ class Trainer:
 		epochs_without_improvement = 0
 		
 		for epoch in range(epochs):
+			if epoch % 100 == 0:
+				print(f"Epoch {epoch} started.")
 			self.train_sampler.set_epoch(epoch)  # Shuffle data differently at each epoch
 			self.model.train()
 			avg_train_loss = 0
@@ -438,7 +440,7 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 5e-4,  # Fixed or configurable as needed
-		'batch_size': 2048,  # Fixed value
+		'batch_size': 1472,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
