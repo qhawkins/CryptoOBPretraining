@@ -44,9 +44,10 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 
 # Adapted Trainer class with DDP support
 class Trainer:
-	def __init__(self, config, rank, world_size, data_parallel_group, shared_dataset: torch.Tensor):
+	def __init__(self, config, rank, world_size, data_parallel_group, train_dataset, test_dataset):
 		self.config = config
-		self.shared_dataset = shared_dataset
+		self.train_dataset = train_dataset
+		self.test_dataset = test_dataset
 		self.rank = rank
 		self.world_size = world_size
 		self.device = torch.device(f'cuda:{rank}' if torch.cuda.is_available() else 'cpu')
@@ -152,7 +153,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=8,
 			pin_memory=True
 		)
 		
@@ -161,7 +162,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.val_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=8,
 			pin_memory=True
 		)
 		
@@ -170,36 +171,38 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.test_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=8,
 			pin_memory=True
 		)
 		
 	def split_data(self):
-		total_size = self.shared_dataset.shape[0]
+		total_size = self.train_dataset.shape[0]
 
 		train_size = int(self.config['split_ratios'][0] * total_size)
 		val_size = int(self.config['split_ratios'][1] * total_size)
+
+		test_size = self.test_dataset.shape[0]
 		
 		self.train_ds = PretrainingDataset(
-			self.shared_dataset,
+			self.train_dataset,
 			0, 
 			train_size, 
-			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", 
-			self.config['temporal_dim']
+			self.config['temporal_dim'],
+			self.config['depth_dim']
 		)
 		self.val_ds = PretrainingDataset(
-			self.shared_dataset,
+			self.train_dataset,
 			train_size,
 			train_size + val_size,
-			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy",
-			self.config['temporal_dim']
+			self.config['temporal_dim'],
+			self.config['depth_dim']
 		)
 		self.test_ds = PretrainingDataset(
-			self.shared_dataset,
-			train_size + val_size, 
-			total_size, 
-			"/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", 
-			self.config['temporal_dim']
+			self.test_dataset,
+			0, 
+			test_size, 
+			self.config['temporal_dim'],
+			self.config['depth_dim']
 		)
 		
 	def initialize_training_components(self):
@@ -393,7 +396,7 @@ class Trainer:
 		plt.legend()
 		plt.show()
 
-def main_worker(rank, world_size, config, shared_dataset):
+def main_worker(rank, world_size, config, train_dataset, test_dataset):
 	# Initialize the process group
 	dist.init_process_group(
 		backend='nccl',
@@ -404,7 +407,7 @@ def main_worker(rank, world_size, config, shared_dataset):
 	data_parallel_group = torch.distributed.new_group(ranks=[rank], backend="nccl")
 
 	# Create a Trainer instance
-	trainer = Trainer(config, rank, world_size, data_parallel_group=data_parallel_group, shared_dataset=shared_dataset)
+	trainer = Trainer(config, rank, world_size, data_parallel_group=data_parallel_group, train_dataset=train_dataset, test_dataset=test_dataset)
 	
 	# Train the model
 	trainer.train(epochs=config['epochs'])
@@ -435,7 +438,7 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 5e-4,  # Fixed or configurable as needed
-		'batch_size': 512,  # Fixed value
+		'batch_size': 2048,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
@@ -446,20 +449,23 @@ def main():
 	
 	setup_env_variables()
 	
-	torch.multiprocessing.set_sharing_strategy('file_descriptor')
+	torch.multiprocessing.set_sharing_strategy('file_system')
     
-	dataset: np.array = np.load("/home/azureuser/data/full_parsed.npy")
-	dataset = torch.from_numpy(dataset)
-	shared_dataset = torch.Tensor.share_memory_(dataset)
-
+	train_dataset_len = np.load("/home/azureuser/data/train_dataset.npy", mmap_mode="r").shape[0]
+	test_dataset_len = np.load("/home/azureuser/data/test_dataset.npy", mmap_mode="r").shape[0]
+	#print("numpy loading finished")
+	#shared_dataset = torch.from_numpy(shared_dataset)
+	shared_train_dataset = torch.from_file("/home/azureuser/data/train_dataset.npy", dtype = torch.float32, shared=True, size=train_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
+	shared_test_dataset = torch.from_file("/home/azureuser/data/test_dataset.npy", dtype = torch.float32, shared=True, size=test_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
+	#shared_dataset.reshape((shared_dataset_len, config["depth_dim"], 2))
+	print('shared_created')
 	# Spawn one process per GPU
 	torch.multiprocessing.spawn(
 		main_worker,
-		args=(world_size, config, shared_dataset),
+		args=(world_size, config, shared_train_dataset, shared_test_dataset),
 		nprocs=world_size,
 		join=True
 	)
 
 if __name__ == '__main__':
 	main()
-
