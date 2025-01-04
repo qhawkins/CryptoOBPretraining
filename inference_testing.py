@@ -27,11 +27,20 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 
     return masked_inputs.cuda(), mask.cuda()
 
-if __name__ == "__main__":
-    test_ds = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode="r")
-    print(test_ds[0])
+def load_model(path: str):
     model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
-    state_dict = torch.load("pretrained_ddp_val_loss_060373841_epoch_4_mse_tiny_transformer.pth")
+    state_dict = torch.load(path)
+    state_dict = state_dict['model_state_dict']
+    state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    model.load_state_dict(state_dict)
+    model.to("cuda")
+    model.eval()
+    return model
+
+if __name__ == "__main__":
+    len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode='r').shape[0]
+    model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
+    state_dict = torch.load("/home/qhawkins/Downloads/pretrained_ddp_val_loss_000055124_epoch_7_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -39,16 +48,17 @@ if __name__ == "__main__":
     model.to("cuda")
     model.eval()
     print("Model loaded")
-    dataset = PretrainingDataset("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", 0, 4096, 128, 96)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
+    dataset = PretrainingDataset("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", 0, len_dataset, 128, 96)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4096, shuffle=False, num_workers=8)
     loss_fn = torch.nn.MSELoss().cuda()
+    model.compile()
 
 
-    
+    loss_values = []
     for idx, data in enumerate(dataloader):
         masked_inputs, mask = apply_mask(
             data,
-            mask_percentage=.15,
+            mask_percentage=.25,
             mask_value=0.0,  # You can choose a different mask value if needed
             device='cuda'
         )
@@ -57,5 +67,10 @@ if __name__ == "__main__":
                 data = data.cuda()
                 outputs = model(masked_inputs)  # Shape: (batch_size, seq_length -1, features)
                 loss_val = loss_fn(outputs[~mask], data[~mask])
-                print(f"Loss: {loss_val.item()}, outputs: {outputs[~mask]}, data: {data[~mask]}")
+                mean_loss = torch.mean(loss_val).cpu()
+                print(f"Mean loss: {mean_loss} for epoch {idx}")
+                loss_values.append(mean_loss)
+        
                 #exit()
+
+    print(f"Mean loss: {torch.mean(torch.tensor(loss_values))}")

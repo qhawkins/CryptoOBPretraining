@@ -64,6 +64,16 @@ class Trainer:
 		# Initialize other components
 		self.initialize_training_components()
 		
+	def load_model(self, path: str):
+		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), 0.25)
+		state_dict = torch.load(path)
+		state_dict = state_dict['model_state_dict']
+		state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+		self.model.load_state_dict(state_dict)
+		self.model = self.model.to(self.device)
+		self.model = self.model.train()
+		#self.model = self.model.compile()
+
 	def initialize_model(self):
 		model_size = self.config['model_size']
 		temporal_dim = self.config['temporal_dim']
@@ -83,16 +93,21 @@ class Trainer:
 		if model_size not in model_classes:
 			raise ValueError(f"Unsupported model size: {model_size}")
 		
-		self.model = model_classes[model_size](
-			(temporal_dim, depth_dim, 2),
-			(temporal_dim, depth_dim, 2),
-			dropout
-		).to(self.device)
-		
-		# Compile the model for potential performance benefits
-		self.model = torch.compile(self.model)
-		
-		# Wrap the model with DDP
+		if self.config['load_model']:
+			self.load_model(self.config['model_path'])
+			print(f"Model loaded from {self.config['model_path']}")
+
+		else:
+			self.model = model_classes[model_size](
+				(temporal_dim, depth_dim, 2),
+				(temporal_dim, depth_dim, 2),
+				dropout
+			).to(self.device)
+			
+			# Compile the model for potential performance benefits
+			self.model = torch.compile(self.model)
+			
+			# Wrap the model with DDP
 		self.model = DDP(self.model, device_ids=[self.rank], find_unused_parameters=True, process_group=self.data_parallel_group)
 		
 	def initialize_criterion_optimizer(self):
@@ -154,7 +169,7 @@ class Trainer:
 			sampler=self.train_sampler,
 			drop_last=True,
 			num_workers=8,
-			pin_memory=True
+			pin_memory=True,
 		)
 		
 		self.val_dataloader = DataLoader(
@@ -163,7 +178,7 @@ class Trainer:
 			sampler=self.val_sampler,
 			drop_last=True,
 			num_workers=8,
-			pin_memory=True
+			pin_memory=True,
 		)
 		
 		self.test_dataloader = DataLoader(
@@ -172,7 +187,7 @@ class Trainer:
 			sampler=self.test_sampler,
 			drop_last=True,
 			num_workers=8,
-			pin_memory=True
+			pin_memory=True,
 		)
 		
 	def split_data(self):
@@ -446,7 +461,9 @@ def main():
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 250  # Define the number of epochs
+		'epochs': 250,  # Define the number of epochs
+		'load_model': True,
+		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000064671_epoch_195_mse_tiny_transformer.pth"
 	}
 	
 	setup_env_variables()

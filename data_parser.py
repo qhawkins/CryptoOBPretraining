@@ -149,7 +149,7 @@ def map_order_type(update_type: str) -> np.int64:
 
 if __name__ == "__main__":
     depth = 96
-    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
+    raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
     #raw_data = raw_data.iloc
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
@@ -187,7 +187,7 @@ if __name__ == "__main__":
     #ob_state = ob_state/1e7
     #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
-    np.save("full_parsed.npy", ob_state)
+    np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
     
     
     
