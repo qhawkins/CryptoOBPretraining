@@ -1,4 +1,4 @@
-from models import SmallFCModel, MediumFCModel, LargeFCModel, TinyLSTMModel, DeepLSTMModel, ShallowLSTMModel
+from models import SmallFCModel, MediumFCModel, LargeFCModel, TinyLSTMModel, DeepLSTMModel, ShallowLSTMModel, TinyTransformerModel
 from training_classes import normalize_data, PretrainingDataset
 import torch
 import numpy as np
@@ -28,18 +28,18 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
     return masked_inputs.cuda(), mask.cuda()
 
 if __name__ == "__main__":
-    test_ds = np.load("test.npy", mmap_mode="r")[-10000:-128]
-    print(test_ds)
-    model = ShallowLSTMModel((128, 128, 2), (128, 128, 2), 0.25)
-    state_dict = torch.load("/media/qhawkins/SSD3/ray_vault/run3/pretrained1_val_loss_000029784_epoch_0_mse_shallow_lstm.pth")
+    test_ds = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode="r")
+    print(test_ds[0])
+    model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
+    state_dict = torch.load("pretrained_ddp_val_loss_060373841_epoch_4_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
-    state_dict = {k.replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
     model.load_state_dict(state_dict)
     model.to("cuda")
     model.eval()
     print("Model loaded")
-    dataset = PretrainingDataset(test_ds, 128)
+    dataset = PretrainingDataset("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", 0, 4096, 128, 96)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False)
     loss_fn = torch.nn.MSELoss().cuda()
 

@@ -219,7 +219,7 @@ class Trainer:
 			factor=self.lr_decay_factor,
 			patience=self.lr_decay_patience
 		)
-		self.scaler = torch.cuda.amp.GradScaler()
+		self.scaler = torch.amp.GradScaler(f"cuda:{self.rank}")
 		self.early_stopping_patience = self.config['early_stopping_patience']
 		self.saved_models = deque(maxlen=self.early_stopping_patience + 1)
 		self.best_val_loss = float('inf')
@@ -278,7 +278,7 @@ class Trainer:
 				
 				self.optimizer.zero_grad()
 				
-				with torch.cuda.amp.autocast():
+				with torch.amp.autocast(f"cuda:{self.rank}"):
 					outputs = self.model(masked_inputs)
 					loss = self.criterion(outputs[~mask], data[~mask])
 				
@@ -304,7 +304,7 @@ class Trainer:
 						device=self.device
 					)
 					
-					with torch.cuda.amp.autocast():
+					with torch.amp.autocast(f"cuda:{self.rank}"):
 						outputs = self.model(masked_inputs)
 						loss = self.criterion(outputs[~mask], data[~mask])
 					
@@ -357,7 +357,7 @@ class Trainer:
 					device=self.device
 				)
 				
-				with torch.cuda.amp.autocast():
+				with torch.amp.autocast(f"cuda:{self.rank}"):
 					outputs = self.model(masked_inputs)
 					loss = self.criterion(outputs[~mask], data[~mask])
 					test_loss += loss.item()
@@ -377,7 +377,7 @@ class Trainer:
 					device=self.device
 				)
 				
-				with torch.cuda.amp.autocast():
+				with torch.amp.autocast(f"cuda:{self.rank}"):
 					outputs = self.model(masked_inputs)
 					loss = mae_loss(outputs[~mask], data[~mask])
 					test_loss += loss.item()
@@ -439,14 +439,14 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 5e-4,  # Fixed or configurable as needed
+		'lr': 1e-4,  # Fixed or configurable as needed
 		'batch_size': 1472,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 100  # Define the number of epochs
+		'epochs': 250  # Define the number of epochs
 	}
 	
 	setup_env_variables()

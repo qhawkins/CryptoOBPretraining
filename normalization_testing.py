@@ -22,7 +22,7 @@ def normalize_data(data: torch.Tensor):
 
     return data
 
-data = np.load("test.npy")
+data = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/train_dataset.npy")
 #print(f"Data nan count: {np.sum(np.isnan(data))}")
 data_torch = torch.from_numpy(data)
 print(f"Data torch nan count: {torch.sum(torch.isnan(data_torch))}")
@@ -33,7 +33,7 @@ print(data.shape)
 
 
 normalized_data = normalize_data(data_torch)
-print(normalized_data)
+print(normalized_data[0, :, :])
 print(100*"-")
 print(normalized_data[-1, :, :])
 
