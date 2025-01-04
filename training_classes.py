@@ -88,12 +88,13 @@ class LossIncreaseStopper(Stopper):
 class PretrainingDataset(Dataset):
 	 # Class-level variable to hold the memory map
 
-	def __init__(self, data: torch.Tensor, start_idx: int, end_idx: int, temporal_offset: int = 512, depth: int = 96):
+	def __init__(self, data_path: str, start_idx: int, end_idx: int, temporal_offset: int = 512, depth: int = 96):
+		
 		self.start_idx = start_idx
 		self.end_idx = end_idx
 		self.offset = temporal_offset
 		self.length = self.end_idx - self.start_idx - self.offset
-		self.data = data
+		self.data = np.load(data_path, mmap_mode='r')
 		self.temporal_offset = temporal_offset
 		self.depth = depth
 		self.dim_multiplier = temporal_offset*depth*2
@@ -106,16 +107,16 @@ class PretrainingDataset(Dataset):
 		if isinstance(idx, int):
 			if idx < 0 or idx >= self.length:
 				raise IndexError(f"Index {idx} is out of bounds for dataset with length {self.length}")
-			data_slice = self.data
-			data_slice = self.data[(idx + self.start_idx)*self.dim_multiplier].view((self.temporal_offset, self.depth, 2))
-			data_slice = data_slice.clone()
+			data_slice: np.array = self.data[idx]
+			data_slice = torch.from_numpy(data_slice.copy())
+			#data_slice = data_slice.clone()
 			normalized = normalize_data(data_slice)
 			nan_count = torch.sum(torch.isnan(normalized))
 			if nan_count > 0:
 				print(f"Found {nan_count} nans in slice {idx}")
 				print(normalized)
-				raise ValueError(f"Nans found in normalized slice with indices {idx}:{idx + self.offset}")
-			return normalized.pin_memory()
+				raise ValueError(f"Nans found in normalized slice with indices {idx + self.start_idx}:{idx + self.offset}")
+			return normalized
 		elif isinstance(idx, slice):
 			normalized = self.data[idx]
 			return normalized

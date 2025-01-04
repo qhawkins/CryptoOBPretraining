@@ -90,7 +90,7 @@ class Trainer:
 		).to(self.device)
 		
 		# Compile the model for potential performance benefits
-		self.model = torch.compile(self.model, backend="cudagraphs")
+		self.model = torch.compile(self.model)
 		
 		# Wrap the model with DDP
 		self.model = DDP(self.model, device_ids=[self.rank], find_unused_parameters=True, process_group=self.data_parallel_group)
@@ -176,12 +176,12 @@ class Trainer:
 		)
 		
 	def split_data(self):
-		total_size = self.train_dataset.shape[0]
+		total_size = np.load(self.train_dataset, mmap_mode="r").shape[0]
 
 		train_size = int(self.config['split_ratios'][0] * total_size)
 		val_size = int(self.config['split_ratios'][1] * total_size)
 
-		test_size = self.test_dataset.shape[0]
+		test_size = np.load(self.test_dataset, mmap_mode="r").shape[0]
 		
 		self.train_ds = PretrainingDataset(
 			self.train_dataset,
@@ -450,22 +450,39 @@ def main():
 	setup_env_variables()
 	
 	torch.multiprocessing.set_sharing_strategy('file_system')
-    
-	train_dataset_len = np.load("/home/azureuser/data/train_dataset.npy", mmap_mode="r").shape[0]
-	test_dataset_len = np.load("/home/azureuser/data/test_dataset.npy", mmap_mode="r").shape[0]
+	
+	#train_dataset_len = 1599976 #= np.load("/home/azureuser/data/train_dataset.npy", mmap_mode="r").shape[0]
+	#test_dataset_len = 399994#np.load("/home/azureuser/data/test_dataset.npy", mmap_mode="r").shape[0]
+	shared_train_dataset = "/home/azureuser/data/train_dataset.npy"
+	shared_test_dataset = "/home/azureuser/data/test_dataset.npy"
 	#print("numpy loading finished")
 	#shared_dataset = torch.from_numpy(shared_dataset)
-	shared_train_dataset = torch.from_file("/home/azureuser/data/train_dataset.npy", dtype = torch.float32, shared=True, size=train_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
-	shared_test_dataset = torch.from_file("/home/azureuser/data/test_dataset.npy", dtype = torch.float32, shared=True, size=test_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
+	#shared_train_dataset = torch.from_file("/home/azureuser/data/train_dataset.npy", dtype = torch.float32, size=train_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
+	#shared_test_dataset = torch.from_file("/home/azureuser/data/test_dataset.npy", dtype = torch.float32, size=test_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
+	#shared_train_dataset = shared_train_dataset.share_memory_()
+	#shared_test_dataset = shared_test_dataset.share_memory_()
 	#shared_dataset.reshape((shared_dataset_len, config["depth_dim"], 2))
-	print('shared_created')
+	#print('shared_created')
 	# Spawn one process per GPU
+	children = []
+
+	for i in range(world_size):
+		subproc = mp.Process(target=main_worker, args=(i, world_size, config, shared_train_dataset, shared_test_dataset))
+		children.append(subproc)
+		subproc.start()
+		print(f"Process {i} started.")
+
+	for i in range(world_size):
+		children[i].join()
+
+	"""
 	torch.multiprocessing.spawn(
 		main_worker,
 		args=(world_size, config, shared_train_dataset, shared_test_dataset),
 		nprocs=world_size,
 		join=True
 	)
-
+	"""
+	
 if __name__ == '__main__':
 	main()
