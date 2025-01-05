@@ -473,7 +473,7 @@ def main():
 		'epochs': 250,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000064671_epoch_195_mse_tiny_transformer.pth",
-		'max_lr': 1e-2
+		'max_lr': 1e-3
 	}
 	
 	setup_env_variables()
