@@ -455,14 +455,14 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 1472,  # Fixed value
+		'batch_size': 1600,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
 		'epochs': 250,  # Define the number of epochs
-		'load_model': True,
+		'load_model': False,
 		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000064671_epoch_195_mse_tiny_transformer.pth"
 	}
 	
@@ -472,8 +472,8 @@ def main():
 	
 	#train_dataset_len = 1599976 #= np.load("/home/azureuser/data/train_dataset.npy", mmap_mode="r").shape[0]
 	#test_dataset_len = 399994#np.load("/home/azureuser/data/test_dataset.npy", mmap_mode="r").shape[0]
-	shared_train_dataset = "/home/azureuser/data/train_dataset.npy"
-	shared_test_dataset = "/home/azureuser/data/test_dataset.npy"
+	shared_train_dataset = "/home/azureuser/datadrive/train_dataset.npy"
+	shared_test_dataset = "/home/azureuser/datadrive/test_dataset.npy"
 	#print("numpy loading finished")
 	#shared_dataset = torch.from_numpy(shared_dataset)
 	#shared_train_dataset = torch.from_file("/home/azureuser/data/train_dataset.npy", dtype = torch.float32, size=train_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
