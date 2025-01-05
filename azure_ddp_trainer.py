@@ -352,9 +352,9 @@ class Trainer:
 					epochs_without_improvement += 1
 				
 				# Early Stopping Logic
-				if epochs_without_improvement >= self.early_stopping_patience:
-					print("Early stopping triggered.")
-					break
+				#if epochs_without_improvement >= self.early_stopping_patience:
+				#	print("Early stopping triggered.")
+			#		break
 		
 		if self.rank == 0:
 			print(f"Training completed. Best model saved at: {self.best_model_path}")
@@ -463,17 +463,17 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 2e-4,  # Fixed or configurable as needed
-		'batch_size': 1600,  # Fixed value
+		'lr': 1e-4,  # Fixed or configurable as needed
+		'batch_size': 1856,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 250,  # Define the number of epochs
+		'epochs': 100,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000064671_epoch_195_mse_tiny_transformer.pth",
-		'max_lr': 1e-3
+		'max_lr': 5e-4
 	}
 	
 	setup_env_variables()
