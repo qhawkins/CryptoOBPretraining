@@ -305,7 +305,8 @@ class Trainer:
 				self.scaler.step(self.optimizer)
 				self.scaler.update()
 				self.scheduler.step()
-				
+				with open(f"/home/azureuser/single_models/{self.model_name}_epoch_train_losses.txt", "a+") as f:
+					f.write(f"{loss.item()}\n")
 				avg_train_loss += loss.item()
 				self.step_losses.append(loss.item())
 			
@@ -327,7 +328,8 @@ class Trainer:
 					with torch.amp.autocast(f"cuda:{self.rank}"):
 						outputs = self.model(masked_inputs)
 						loss = self.criterion(outputs[~mask], data[~mask])
-					
+					with open(f"/home/azureuser/single_models/{self.model_name}_epoch_val_losses.txt", "a+") as f:
+						f.write(f"{loss.item()}\n")
 					avg_val_loss += loss.item()
 				avg_val_loss /= (i + 1)
 			
@@ -464,7 +466,7 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 1856,  # Fixed value
+		'batch_size': 2048,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
