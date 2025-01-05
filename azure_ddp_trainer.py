@@ -343,6 +343,9 @@ class Trainer:
 					f.write(f"{avg_train_loss}\n")
 				with open(f"/home/azureuser/single_models/{self.model_name}_val_losses.txt", "a+") as f:
 					f.write(f"{avg_val_loss}\n")
+				with open(f"/home/azureuser/single_models/{self.model_name}_lr.txt", "a+") as f:
+					f.write(f"{self.scheduler.get_last_lr()[0]}\n")
+					
 				print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
 				self.save_model(epoch, avg_val_loss)
 				if avg_val_loss < best_val_loss:
