@@ -463,7 +463,7 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 1e-4,  # Fixed or configurable as needed
+		'lr': 2e-4,  # Fixed or configurable as needed
 		'batch_size': 1600,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
