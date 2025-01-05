@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 import matplotlib.pyplot as plt
 from collections import deque
 import numpy as np
+import time
 os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 
 
@@ -63,6 +64,8 @@ class Trainer:
 		
 		# Initialize other components
 		self.initialize_training_components()
+		self.train_losses = []
+		self.val_losses = []
 		
 	def load_model(self, path: str):
 		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), 0.25)
@@ -228,11 +231,11 @@ class Trainer:
 		self.ratios = self.config['split_ratios']
 		self.lr_decay_factor = self.config['lr_decay_factor']
 		self.lr_decay_patience = self.config['lr_decay_patience']
-		self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+		self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
 			self.optimizer,
-			mode='min',
-			factor=self.lr_decay_factor,
-			patience=self.lr_decay_patience
+			max_lr=self.config["max_lr"],
+			epochs=self.config["epochs"],
+			steps_per_epoch=len(self.train_dataloader)
 		)
 		self.scaler = torch.amp.GradScaler(f"cuda:{self.rank}")
 		self.early_stopping_patience = self.config['early_stopping_patience']
@@ -275,6 +278,7 @@ class Trainer:
 		epochs_without_improvement = 0
 		
 		for epoch in range(epochs):
+			epoch_start_time = time.time()
 			if epoch % 100 == 0:
 				print(f"Epoch {epoch} started.")
 			self.train_sampler.set_epoch(epoch)  # Shuffle data differently at each epoch
@@ -300,6 +304,7 @@ class Trainer:
 				self.scaler.scale(loss).backward()
 				self.scaler.step(self.optimizer)
 				self.scaler.update()
+				self.scheduler.step()
 				
 				avg_train_loss += loss.item()
 				self.step_losses.append(loss.item())
@@ -327,13 +332,17 @@ class Trainer:
 				avg_val_loss /= (i + 1)
 			
 			# Only the master process logs and saves models
+			epoch_end_time = time.time()
 			if self.rank == 0:
 				self.train_loss_history.append(avg_train_loss)
 				self.val_loss_history.append(avg_val_loss)
-				self.scheduler.step(avg_val_loss)
-				print(f'Epoch {epoch+1}/{epochs}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}')
+				#self.scheduler.step(avg_val_loss)
+				with open(f"/home/azureuser/single_models/{self.model_name}_train_losses.txt", "a+") as f:
+					f.write(f"{avg_train_loss}\n")
+				with open(f"/home/azureuser/single_models/{self.model_name}_val_losses.txt", "a+") as f:
+					f.write(f"{avg_val_loss}\n")
+				print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
 				self.save_model(epoch, avg_val_loss)
-			
 				if avg_val_loss < best_val_loss:
 					best_val_loss = avg_val_loss
 					epochs_without_improvement = 0
@@ -450,7 +459,7 @@ def main():
 		'split_ratios': [0.7, 0.25, 0.05],
 		'lr_decay_factor': 0.5,  # Fixed value instead of tune.choice
 		'lr_decay_patience': 5,
-		'early_stopping_patience': 25,
+		'early_stopping_patience': 15,
 		'best_model_path': "best_model.pth",
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
@@ -463,7 +472,8 @@ def main():
 		'depth_dim': 96,
 		'epochs': 250,  # Define the number of epochs
 		'load_model': False,
-		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000064671_epoch_195_mse_tiny_transformer.pth"
+		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000064671_epoch_195_mse_tiny_transformer.pth",
+		'max_lr': 1e-2
 	}
 	
 	setup_env_variables()
