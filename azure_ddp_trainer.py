@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 from collections import deque
 import numpy as np
 import time
-os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+#os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 
 
 # Import your existing classes and functions
@@ -279,8 +281,6 @@ class Trainer:
 		
 		for epoch in range(epochs):
 			epoch_start_time = time.time()
-			if epoch % 100 == 0:
-				print(f"Epoch {epoch} started.")
 			self.train_sampler.set_epoch(epoch)  # Shuffle data differently at each epoch
 			self.model.train()
 			avg_train_loss = 0
