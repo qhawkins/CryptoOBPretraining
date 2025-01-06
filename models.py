@@ -309,7 +309,8 @@ class TinyTransformerModel(torch.nn.Module):
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
         self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
         self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_dim*self.depth_dim, nhead=8, dim_feedforward=6400, dropout=dropout, batch_first=True)
-        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=8)
+        self.layer_norm = torch.nn.LayerNorm(self.features_dim*self.depth_dim)
+        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=8, norm=self.layer_norm)
 
 
     def forward(self, x: torch.Tensor):
