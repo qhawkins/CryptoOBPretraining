@@ -308,6 +308,10 @@ class TinyTransformerModel(torch.nn.Module):
         self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
 
+        self.output_fc = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
+        self.output_dropout = torch.nn.Dropout(dropout)
+        self.output_relu = torch.nn.ReLU()
+
         position = torch.arange(self.temporal_dim).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, self.features_dim*self.depth_dim, 2) * (-torch.log((torch.tensor(10000.0))) / self.features_dim*self.depth_dim))
         pe = torch.zeros(1, self.temporal_dim, self.features_dim*self.depth_dim)
@@ -318,14 +322,14 @@ class TinyTransformerModel(torch.nn.Module):
         #self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
         self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_dim*self.depth_dim, nhead=8, dim_feedforward=6400, dropout=dropout, batch_first=True)
         #self.layer_norm = torch.nn.LayerNorm(self.features_dim*self.depth_dim)
-        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=8)
+        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=12)
 
 
     def forward(self, x: torch.Tensor):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
-        x = x.view(-1, self.temporal_dim, self.features_dim* self.depth_dim)
-        x = x + self.pe[:x.size(1)]
+        self.input = x.view(-1, self.temporal_dim, self.features_dim * self.depth_dim)
+        x = self.input + self.pe[:x.size(1)]
         
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
@@ -333,6 +337,10 @@ class TinyTransformerModel(torch.nn.Module):
         #x = x.view(-1, 2048)
         #print(f"Shape after transformer: {x.shape}")
         #x = self.fc1(x)
+        x = self.output_fc(x)
+        x = self.output_relu(x)
+        x = self.output_dropout(x)
+        x = x + self.input
         x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x

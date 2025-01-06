@@ -40,7 +40,7 @@ def load_model(path: str):
 if __name__ == "__main__":
     len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode='r').shape[0]
     model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
-    state_dict = torch.load("/home/qhawkins/Downloads/")
+    state_dict = torch.load("/home/qhawkins/Downloads/pretrained_ddp_val_loss_000037031_epoch_18_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
