@@ -307,17 +307,27 @@ class TinyTransformerModel(torch.nn.Module):
         self.temporal_dim = input_shape[0]
         self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
-        self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
+
+        position = torch.arange(self.temporal_dim).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, self.features_dim*self.depth_dim, 2) * (-torch.log(10000.0) / self.features_dim*self.depth_dim))
+        pe = torch.zeros(1, self.temporal_dim, self.features_dim*self.depth_dim)
+        pe[0, :, 0::2] = torch.sin(position * div_term)
+        pe[0, :, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+        #self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
         self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_dim*self.depth_dim, nhead=8, dim_feedforward=6400, dropout=dropout, batch_first=True)
-        self.layer_norm = torch.nn.LayerNorm(self.features_dim*self.depth_dim)
-        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=8, norm=self.layer_norm)
+        #self.layer_norm = torch.nn.LayerNorm(self.features_dim*self.depth_dim)
+        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=8)
 
 
     def forward(self, x: torch.Tensor):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
         x = x.view(-1, self.temporal_dim, self.features_dim* self.depth_dim)
-        x = self.positional_encoder(x)
+        x = x + self.pe[:x.size(1)]
+        
+        #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
         x = self.transformer(x)
         #x = x.view(-1, 2048)
