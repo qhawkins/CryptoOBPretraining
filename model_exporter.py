@@ -13,8 +13,8 @@ def load_model(path: str):
 
 
 if __name__ == "__main__":
-    model = load_model("/home/qhawkins/Downloads/pretrained_ddp_val_loss_000055124_epoch_7_mse_tiny_transformer.pth")
+    model = load_model("/home/qhawkins/Downloads/pretrained_ddp_val_loss_005055957_epoch_4_mse_tiny_transformer.pth")
     example = torch.rand(128, 96, 2)
-    traced_script_module = torch.jit.trace(model, example)
+    traced_script_module = torch.jit.script(model).train(True)
     traced_script_module.save("traced_transformer_model.pt")
     print("Model saved")

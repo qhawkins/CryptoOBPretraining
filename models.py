@@ -309,7 +309,7 @@ class TinyTransformerModel(torch.nn.Module):
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
 
         position = torch.arange(self.temporal_dim).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, self.features_dim*self.depth_dim, 2) * (-torch.log(10000.0) / self.features_dim*self.depth_dim))
+        div_term = torch.exp(torch.arange(0, self.features_dim*self.depth_dim, 2) * (-torch.log((torch.tensor(10000.0))) / self.features_dim*self.depth_dim))
         pe = torch.zeros(1, self.temporal_dim, self.features_dim*self.depth_dim)
         pe[0, :, 0::2] = torch.sin(position * div_term)
         pe[0, :, 1::2] = torch.cos(position * div_term)
