@@ -299,7 +299,7 @@ class Trainer:
 				
 				with torch.amp.autocast(f"cuda:{self.rank}"):
 					outputs = self.model(masked_inputs)
-					loss = self.criterion(outputs[~mask], data[~mask])
+					loss = self.criterion(outputs[mask], data[mask])
 				
 				self.scaler.scale(loss).backward()
 				self.scaler.step(self.optimizer)
@@ -327,7 +327,7 @@ class Trainer:
 					
 					with torch.amp.autocast(f"cuda:{self.rank}"):
 						outputs = self.model(masked_inputs)
-						loss = self.criterion(outputs[~mask], data[~mask])
+						loss = self.criterion(outputs[mask], data[mask])
 					with open(f"/home/azureuser/single_models/{self.model_name}_epoch_val_losses.txt", "a+") as f:
 						f.write(f"{loss.item()}\n")
 					avg_val_loss += loss.item()
@@ -388,7 +388,7 @@ class Trainer:
 				
 				with torch.amp.autocast(f"cuda:{self.rank}"):
 					outputs = self.model(masked_inputs)
-					loss = self.criterion(outputs[~mask], data[~mask])
+					loss = self.criterion(outputs[mask], data[mask])
 					test_loss += loss.item()
 			
 			avg_test_loss = test_loss / (i + 1)
@@ -408,7 +408,7 @@ class Trainer:
 				
 				with torch.amp.autocast(f"cuda:{self.rank}"):
 					outputs = self.model(masked_inputs)
-					loss = mae_loss(outputs[~mask], data[~mask])
+					loss = mae_loss(outputs[mask], data[mask])
 					test_loss += loss.item()
 		
 		avg_test_mae_loss = test_loss / (i + 1)
