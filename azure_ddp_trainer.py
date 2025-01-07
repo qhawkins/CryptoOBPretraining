@@ -113,7 +113,7 @@ class Trainer:
 			self.model = torch.compile(self.model)
 			
 			# Wrap the model with DDP
-		self.model = DDP(self.model, device_ids=[self.rank], find_unused_parameters=True, process_group=self.data_parallel_group)
+		self.model = DDP(self.model, device_ids=[self.rank], process_group=self.data_parallel_group)
 		
 	def initialize_criterion_optimizer(self):
 		loss_type = self.config['loss']

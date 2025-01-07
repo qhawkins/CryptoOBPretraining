@@ -308,10 +308,6 @@ class TinyTransformerModel(torch.nn.Module):
         self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
 
-        self.output_fc = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
-        self.output_dropout = torch.nn.Dropout(dropout)
-        self.output_relu = torch.nn.ReLU()
-
         position = torch.arange(self.temporal_dim).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, self.features_dim*self.depth_dim, 2) * (-torch.log((torch.tensor(10000.0))) / self.features_dim*self.depth_dim))
         pe = torch.zeros(1, self.temporal_dim, self.features_dim*self.depth_dim)
@@ -319,28 +315,45 @@ class TinyTransformerModel(torch.nn.Module):
         pe[0, :, 1::2] = torch.cos(position * div_term)
         self.register_buffer('pe', pe)
 
+        self.embedding_layer = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
+        self.embedding_dropout = torch.nn.Dropout(dropout)
+        self.embedding_relu = torch.nn.ReLU()
+
+        self.output_fc = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
+        self.output_dropout = torch.nn.Dropout(dropout)
+        self.output_relu = torch.nn.ReLU()
+
         #self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
-        self.encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_dim*self.depth_dim, nhead=8, dim_feedforward=6400, dropout=dropout, batch_first=True)
+        encoder_layer = torch.nn.TransformerEncoderLayer(d_model=self.features_dim*self.depth_dim, nhead=8, dim_feedforward=6400, dropout=dropout, batch_first=True)
         #self.layer_norm = torch.nn.LayerNorm(self.features_dim*self.depth_dim)
-        self.transformer = torch.nn.TransformerEncoder(self.encoder_layer, num_layers=12)
+        self.transformer1 = torch.nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.transformer2 = torch.nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.transformer3 = torch.nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.transformer4 = torch.nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.transformer5 = torch.nn.TransformerEncoder(encoder_layer, num_layers=2)
+        self.transformer6 = torch.nn.TransformerEncoder(encoder_layer, num_layers=2)
 
-
-    def forward(self, x: torch.Tensor):
+    def forward(self, input: torch.Tensor):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
-        self.input = x.view(-1, self.temporal_dim, self.features_dim * self.depth_dim)
-        x = self.input + self.pe[:x.size(1)]
+        self.input = input.view(-1, self.temporal_dim, self.features_dim * self.depth_dim)
+        self.input = self.input + self.pe[:input.size(1)]
         
+        self.embedding = self.embedding_layer(self.input)
+        self.embedding = self.embedding_dropout(self.embedding)
+        self.embedding = self.embedding_relu(self.embedding)
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
-        x = self.transformer(x)
-        #x = x.view(-1, 2048)
-        #print(f"Shape after transformer: {x.shape}")
-        #x = self.fc1(x)
-        x = self.output_fc(x)
-        x = self.output_relu(x)
-        x = self.output_dropout(x)
-        x = x + self.input
-        x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        self.output1 = self.transformer1(self.embedding)
+        self.output2 = self.transformer2(self.output1+self.embedding)
+        self.output3 = self.transformer3(self.output1+self.output2+self.embedding)
+        self.output4 = self.transformer4(self.output1+self.output2+self.output3+self.embedding)
+        self.output5 = self.transformer5(self.output1+self.output2+self.output3+self.output4+self.embedding)
+        self.output6 = self.transformer6(self.output1+self.output2+self.output3+self.output4+self.output5+self.embedding)
+
+        self.output7 = self.output_fc(self.output1+self.output2+self.output3+self.output4+self.output5+self.output6+self.embedding)
+        self.output7 = self.output_dropout(self.output7)
+        self.output7 = self.output_relu(self.output7)
+        x = self.output7.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x
