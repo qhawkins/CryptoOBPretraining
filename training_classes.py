@@ -4,25 +4,36 @@ import numpy as np
 import torch
 import os
 
-def normalize_slice(data: torch.Tensor):
-	mean = torch.mean(data)
-	std = torch.std(data)
-	return (data - mean) / (std + 1e-6)
+def min_max_normalize(data: torch.Tensor):
+    min_val = torch.min(data)
+    max_val = torch.max(data)
+    return (data - min_val) / (max_val - min_val)
 
+def volume_normalize(data: torch.Tensor):
+    #divide all volume values by the total volume in the slice and then min-max normalize the data
+    cumulative_volume = torch.sum(data)
+    data = data / cumulative_volume
+    return min_max_normalize(data)
+
+def price_normalize(data: torch.Tensor):
+    #divide all price values by the mid price in the slice and then min-max normalize the data
+    beginning = data[0]
+    #print(beginning.shape)
+    data = torch.div(data, beginning)
+    return min_max_normalize(data)
 
 def normalize_data(data: torch.Tensor):
-	"""
-	Normalizes the input data to have zero mean and unit variance.
-	
-	:param data: A torch.Tensor of shape (time, depth, features)
-	:return: A torch.Tensor of shape (time, depth, features) with zero mean and unit variance
-	"""
+    """
+    Normalizes the input data to have zero mean and unit variance.
+    
+    :param data: A torch.Tensor of shape (time, depth, features)
+    :return: A torch.Tensor of shape (time, depth, features) with zero mean and unit variance
+    """
+    data[:, :, 0] = price_normalize(data[:, :, 0])
+    data[:, :, 1] = volume_normalize(data[:, :, 1])
+    #data[:, :, 2] = normalize_slice(data[:, :, 2])
 
-	data[:, :, 0] = normalize_slice(data[:, :, 0])
-	data[:, :, 1] = normalize_slice(data[:, :, 1])
-	#data[:, :, 2] = normalize_slice(data[:, :, 2])
-
-	return data
+    return data
 
 class CombinedNanPlateauStopper(Stopper):
 	def __init__(self, metric, std, num_results, grace_period, metric_threshold, mode):

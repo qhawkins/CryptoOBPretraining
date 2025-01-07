@@ -44,23 +44,30 @@ def find_max_price_index(prices):
 def sort_levels(levels: np.array)-> np.array:
     return levels[np.argsort(levels[:, 0])]
 
+@numba.njit(cache=True)
+def find_last_is_buy(levels: np.array):
+    """
+    Find the index of the last is_buy level.
+    """
+    for i in range(len(levels)-1, -1, -1):
+        if levels[i][2] == 1:
+            return i
+    return -1 
 
 @numba.njit(cache=True)
 def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128):
     flag = False
-    is_buy_sum = 0
-    is_sell_sum = 0
+    max_size = max_size + 16
     #levels is price, size, is_buy
     levels = np.zeros((max_size, 3), dtype=np.float32)
     n_levels = 0
-
     #find_max_price_index
     #find_min_price_index
     #find_price_index
 
     for idx, row in enumerate(arr):
         if idx % 1000000 == 0:
-            print(f"Processing row {idx}, length of levels: {len(levels)}")
+            print(f"Processing row {idx}, length of levels: {len(levels)}, number of 0s in snapshots: {np.sum(snapshots[idx-1000000:idx] == 0)}")
         price = row[2]
         size = row[3]
         update_type = row[0]
@@ -92,37 +99,45 @@ def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128
             levels = sort_levels(levels)
         else:
             levels = sort_levels(levels)
-            num_buys = np.sum(levels[:, 2])
-            num_sells = max_size - num_buys
             if n_levels < max_size:
                 levels[0] = [price, size, is_buy]
                 n_levels += 1
             else:
+                #find mid price
+
+                num_buys = np.sum(levels[:, 2])
+                num_sells = np.count_nonzero(levels[:, 0]) - num_buys
+
+                min_idx = find_min_price_index(levels[:, 0])
+                max_idx = find_max_price_index(levels[:, 0])
+
+
+                buy_orders = levels[min_idx:min_idx+num_buys, :]
+                sell_orders = levels[max_idx-num_sells:max_idx, :]
+
+                if len(buy_orders) > max_size//2:
+                    buy_orders = buy_orders[len(buy_orders)-(max_size//2):, :]
+                    buy_orders = sort_levels(buy_orders)                  
+                if len(sell_orders) > max_size//2:
+                    sell_orders = sell_orders[:(max_size//2), :]
+                    sell_orders = sort_levels(sell_orders)
+
+                levels[(max_size//2)-len(buy_orders):(max_size//2), :] = buy_orders
+                levels[(max_size//2):(max_size//2)+len(sell_orders), :] = sell_orders
+
                 if num_buys > num_sells:
-                    min_idx = find_min_price_index(levels[:, 0])
-                    levels[min_idx] = [price, size, is_buy]
-
+                    levels[find_min_price_index(levels[:, 0]), :] = [0, 0, 0]
+                    n_levels -= 1
                 elif num_sells > num_buys:
-                    max_idx = find_max_price_index(levels[:, 0])
-                    levels[max_idx] = [price, size, is_buy]
-                else:
-                    #find mid price
-                    mid_price = (levels[max_size//2][0] + levels[max_size//2 + 1][0])/2
-                    max_distance_from_mid = levels[find_max_price_index(levels[:, 0])][0] - mid_price
-                    min_distance_from_mid = mid_price - levels[find_min_price_index(levels[:, 0])][0]
-                    if max_distance_from_mid > min_distance_from_mid:
-                        max_idx = find_max_price_index(levels[:, 0])
-                        levels[max_idx] = [price, size, is_buy]
-                    else:
-                        min_idx = find_min_price_index(levels[:, 0])
-                        levels[min_idx] = [price, size, is_buy]
-
-                    
+                    levels[find_max_price_index(levels[:, 0]), :] = [0, 0, 0]
+                    n_levels -= 1                    
         if n_levels == max_size:
             if flag is False:
                 start_idx = idx
                 flag = True
-            snapshots[idx] = levels[:, :2]
+            if 0.0 in levels[8:-8, :2]:
+                continue
+            snapshots[idx] = levels[8:-8, :2]
     return snapshots, start_idx
             
 
@@ -149,7 +164,7 @@ def map_order_type(update_type: str) -> np.int64:
 
 if __name__ == "__main__":
     depth = 96
-    raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
+    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", nrows=2000000) #engine="pyarrow", low_memory=True, nrows=10000000)
     #raw_data = raw_data.iloc
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
@@ -162,7 +177,8 @@ if __name__ == "__main__":
     #raw_data.set_index("time_coinapi_int", inplace=True)
 
     raw_data.drop(columns=["time_exchange", "time_coinapi"], inplace=True)
-
+    raw_data = raw_data[raw_data["entry_sx"] != 0]
+    raw_data.reset_index(drop=True, inplace=True)
     print(raw_data.describe())
 
     #raw_data.rename(columns={"time_exchange_int": "time_exchange", "time_coinapi_int": "time_coinapi"}, inplace=True)
@@ -174,6 +190,7 @@ if __name__ == "__main__":
 
 
     raw_data = raw_data.to_numpy(dtype=np.float32)
+    print(f"0s in raw data: {np.sum(raw_data==0)}")
     #raw_data = raw_data[:10000, :]
     #raw_data = raw_data[:, :4]
     print(raw_data.shape)
@@ -187,7 +204,7 @@ if __name__ == "__main__":
     #ob_state = ob_state/1e7
     #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
-    np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
+    np.save("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", ob_state)
     
     
     
