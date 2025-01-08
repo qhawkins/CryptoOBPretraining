@@ -344,6 +344,19 @@ class TinyTransformerModel(torch.nn.Module):
         self.embedding = self.embedding_relu(self.embedding)
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
+        self.output = self.transformer1(self.embedding)
+        self.output = self.transformer2(self.output)
+        self.output = self.transformer3(self.output)
+        self.output = self.transformer4(self.output)
+        self.output = self.transformer5(self.output)
+        self.output = self.transformer6(self.output)
+        self.output = self.output_fc(self.output)
+        self.output = self.output_relu(self.output)
+        self.output = self.output_dropout(self.output)
+        x = self.output.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+
+
+        '''
         self.output1 = self.transformer1(self.embedding)
         self.output2 = self.transformer2(self.output1+self.embedding)
         self.output3 = self.transformer3(self.output1+self.output2+self.embedding)
@@ -355,5 +368,7 @@ class TinyTransformerModel(torch.nn.Module):
         self.output7 = self.output_dropout(self.output7)
         self.output7 = self.output_relu(self.output7)
         x = self.output7.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        
+        '''
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x

@@ -40,7 +40,7 @@ def load_model(path: str):
 if __name__ == "__main__":
     len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode='r').shape[0]
     model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
-    state_dict = torch.load("/home/qhawkins/Downloads/pretrained_ddp_val_loss_076609216_epoch_5_mse_tiny_transformer.pth")
+    state_dict = torch.load("/home/qhawkins/Downloads/pretrained_ddp_val_loss_004381035_epoch_44_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -68,7 +68,7 @@ if __name__ == "__main__":
                 outputs = model(masked_inputs)  # Shape: (batch_size, seq_length -1, features)
                 loss_val = loss_fn(outputs[mask], data[mask])
                 print(f"Data masked: {data[mask]}, outputs masked: {outputs[mask]}")
-                exit()
+                #exit()
                 mean_loss = torch.mean(loss_val).cpu()
                 print(f"Mean loss: {mean_loss} for epoch {idx}")
                 loss_values.append(mean_loss)
