@@ -19,127 +19,8 @@ def find_price_index(prices, price):
     return -1
 
 @numba.njit(cache=True)
-def find_min_price_index(prices):
-    """
-    Find the index of the minimum price.
-    """
-    min_idx = 0
-    for i in range(len(prices)):
-        if prices[i] < prices[min_idx]:
-            min_idx = i
-    return min_idx
-
-@numba.njit(cache=True)
-def find_max_price_index(prices):
-    """
-    Find the index of the maximum price.
-    """
-    max_idx = 0
-    for i in range(len(prices)):
-        if prices[i] > prices[max_idx]:
-            max_idx = i
-    return max_idx
-
-@numba.njit(cache=True)
 def sort_levels(levels: np.array)-> np.array:
     return levels[np.argsort(levels[:, 0])]
-
-@numba.njit(cache=True)
-def find_last_is_buy(levels: np.array):
-    """
-    Find the index of the last is_buy level.
-    """
-    for i in range(len(levels)-1, -1, -1):
-        if levels[i][2] == 1:
-            return i
-    return -1 
-
-@numba.njit(cache=True)
-def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128):
-    flag = False
-    max_size = max_size + 16
-    #levels is price, size, is_buy
-    levels = np.zeros((max_size, 3), dtype=np.float32)
-    n_levels = 0
-    #find_max_price_index
-    #find_min_price_index
-    #find_price_index
-
-    for idx, row in enumerate(arr):
-        if idx % 1000000 == 0:
-            print(f"Processing row {idx}, length of levels: {len(levels)}, number of 0s in snapshots: {np.sum(snapshots[idx-1000000:idx] == 0)}")
-        price = row[2]
-        size = row[3]
-        update_type = row[0]
-        is_buy = row[1]
-        price_in_levels = find_price_index(levels[:, 0], price)
-        if price_in_levels != -1:
-            if update_type == 5.0:
-                levels[price_in_levels][0] = price
-                levels[price_in_levels][1] = size
-                levels[price_in_levels][2] = is_buy
-            elif update_type == 0.0:
-                levels[price_in_levels][1] += size
-            elif update_type == 1.0:
-                levels[price_in_levels][1] -= size
-            elif update_type == 2.0:
-                levels[price_in_levels][1] -= size
-            elif update_type == 3.0:
-                levels[price_in_levels][0] = price
-                levels[price_in_levels][1] = size
-                levels[price_in_levels][2] = is_buy
-            elif update_type == 4.0:
-                levels[price_in_levels][0] = 0
-                levels[price_in_levels][1] = 0
-                levels[price_in_levels][2] = 0
-            else:
-                levels[price_in_levels][0] = price
-                levels[price_in_levels][1] = size
-                levels[price_in_levels][2] = is_buy
-            levels = sort_levels(levels)
-        else:
-            levels = sort_levels(levels)
-            if n_levels < max_size:
-                levels[0] = [price, size, is_buy]
-                n_levels += 1
-            else:
-                #find mid price
-
-                num_buys = np.sum(levels[:, 2])
-                num_sells = np.count_nonzero(levels[:, 0]) - num_buys
-
-                min_idx = find_min_price_index(levels[:, 0])
-                max_idx = find_max_price_index(levels[:, 0])
-
-
-                buy_orders = levels[min_idx:min_idx+num_buys, :]
-                sell_orders = levels[max_idx-num_sells:max_idx, :]
-
-                if len(buy_orders) > max_size//2:
-                    buy_orders = buy_orders[len(buy_orders)-(max_size//2):, :]
-                    buy_orders = sort_levels(buy_orders)                  
-                if len(sell_orders) > max_size//2:
-                    sell_orders = sell_orders[:(max_size//2), :]
-                    sell_orders = sort_levels(sell_orders)
-
-                levels[(max_size//2)-len(buy_orders):(max_size//2), :] = buy_orders
-                levels[(max_size//2):(max_size//2)+len(sell_orders), :] = sell_orders
-
-                if num_buys > num_sells:
-                    levels[find_min_price_index(levels[:, 0]), :] = [0, 0, 0]
-                    n_levels -= 1
-                elif num_sells > num_buys:
-                    levels[find_max_price_index(levels[:, 0]), :] = [0, 0, 0]
-                    n_levels -= 1                    
-        if n_levels == max_size:
-            if flag is False:
-                start_idx = idx
-                flag = True
-            if 0.0 in levels[8:-8, :2]:
-                continue
-            snapshots[idx] = levels[8:-8, :2]
-    return snapshots, start_idx
-            
 
 def map_order_type(update_type: str) -> np.int64:
     if update_type == 'ADD':
@@ -162,9 +43,121 @@ def map_order_type(update_type: str) -> np.int64:
     else:
         raise ValueError(f"Unknown update type: {update_type}")
 
+@numba.njit(cache=True)
+def order_book_update(levels: np.array, update_type: float, price_idx: float, price: float,  size: float):
+    if update_type == 5.0:
+        levels[price_idx, 0] = price
+        levels[price_idx, 1] = size
+    elif update_type == 0.0:
+        levels[price_idx, 1] += size
+        #print(f"Adding size {size} to price {levels[price_idx, 0]}")
+    elif update_type == 1.0 or update_type == 2.0:
+        levels[price_idx, 1] -= size
+    elif update_type == 3.0:
+        levels[price_idx, 0] = price
+        levels[price_idx, 1] = size
+    elif update_type == 4.0:
+        levels[price_idx, 0] = 0
+        levels[price_idx, 1] = 0
+    else:
+        levels[price_idx, 0] = price
+        levels[price_idx, 1] = size
+    return levels
+
+@numba.njit(cache=True)
+def add_slice(levels: np.array, price: float, size: float):
+    idx = 0
+    storage = np.zeros((len(levels), 2), dtype=np.float32)
+    for i in range(len(levels)-1):
+        if price > levels[i, 0] and price < levels[i+1, 0]:
+            idx = i
+    if price < levels[0, 0]:
+        storage[0, 0] = price
+        storage[0, 1] = size
+        storage[1:, :] = levels[:-1, :]
+        return storage
+    elif idx == 0:
+        levels[idx, 0] = price
+        levels[idx, 1] = size
+        return levels
+    else:
+        storage[:idx, :] = levels[:idx, :]
+        storage[idx, 0] = price
+        storage[idx, 1] = size
+        storage[idx+1:, :] = levels[idx:-1, :]
+        return storage
+
+@numba.njit(cache=True)
+def switch_padding(levels: np.array):
+    first_non_zero = -1
+    for i in range(len(levels)):
+        if levels[i, 0] != 0:
+            first_non_zero = i
+
+    if first_non_zero == 0:
+        #print("First non-zero is 0, no need to switch padding")
+        return levels
+    idx_2 = 0
+    levels_copy = np.zeros_like(levels)
+    for i in range(first_non_zero, len(levels)):
+        if levels[i, 0] != 0:
+            levels_copy[idx_2, 0] = levels[i, 0]
+            levels_copy[idx_2, 1] = levels[i, 1]
+            idx_2 += 1
+    for i in range(idx_2, len(levels)):
+        levels_copy[i, 0] = 0
+        levels_copy[i, 1] = 0
+    return levels_copy
+
+
+@numba.njit(cache=True)
+def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128):
+    flag = False
+    max_size = max_size + 16
+    buys = np.zeros((max_size//2, 2), dtype=np.float32)
+    sells = np.zeros((max_size//2, 2), dtype=np.float32)
+    consolidated = np.zeros((max_size, 2), dtype=np.float32)
+    
+    for idx, row in enumerate(arr):
+        if idx % 1000000 == 0:
+            print(f"Processing row {idx}, number of 0s in snapshots: {np.sum(snapshots[idx-1000000:idx] == 0)}")
+        price = row[2]
+        size = row[3]
+        update_type = row[0]
+        is_buy = row[1]
+        if is_buy == 1.0:
+            price_idx = find_price_index(buys[:, 0], price)
+            if price_idx != -1:
+                buys = order_book_update(buys, update_type, price_idx, price, size)
+            else:
+                buys = add_slice(buys, price, size)        
+                buys = sort_levels(buys)
+
+
+        elif is_buy == 0.0:
+            price_idx = find_price_index(sells[:, 0], price)
+            if price_idx != -1:
+                sells = order_book_update(sells, update_type, price_idx, price, size)
+            else:
+                sells = add_slice(sells, price, size)
+                sells = sort_levels(sells)
+            
+        consolidated[:max_size//2, :] = buys
+        consolidated[max_size//2:, :] = sells
+
+        #consolidated = np.concatenate((buys, sells), axis=0)
+        if flag is False:
+            start_idx = idx
+            flag = True
+        #if 0.0 in consolidated[8:-8, :]:
+        #    continue
+        snapshots[idx] = consolidated[8:-8, :]
+
+    return snapshots, start_idx
+            
 if __name__ == "__main__":
     depth = 96
-    raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", nrows=2000000) #engine="pyarrow", low_memory=True, nrows=10000000)
+    raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
     #raw_data = raw_data.iloc
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
@@ -190,7 +183,7 @@ if __name__ == "__main__":
 
 
     raw_data = raw_data.to_numpy(dtype=np.float32)
-    print(f"0s in raw data: {np.sum(raw_data==0)}")
+    #print(f"0s in raw data: {np.sum(raw_data==0)}")
     #raw_data = raw_data[:10000, :]
     #raw_data = raw_data[:, :4]
     print(raw_data.shape)
@@ -198,13 +191,17 @@ if __name__ == "__main__":
     #exit()
     results = np.zeros((len(raw_data), depth, 2), dtype=np.float32, order="C")
     ob_state, start_idx = optimized_order_book(raw_data, results, depth)
-    ob_state = ob_state[start_idx+1280000:]
+
+    #drop any rows with 0s
+    print(f"Ob_state shape: {ob_state.shape}")
+    ob_state = ob_state[~np.any(ob_state == 0, axis=(1, 2))]
     print("Sliced")
     #print(ob_state[-1, :, 0])
     #ob_state = ob_state/1e7
     #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
-    np.save("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", ob_state)
+    print(f"Ob_state shape: {ob_state.shape}")
+    np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
     
     
     

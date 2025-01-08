@@ -7,7 +7,7 @@ import os
 def min_max_normalize(data: torch.Tensor):
     min_val = torch.min(data)
     max_val = torch.max(data)
-    return (data - min_val) / (max_val - min_val)
+    return (data - min_val) / ((max_val - min_val) + 1e-6)
 
 def volume_normalize(data: torch.Tensor):
     #divide all volume values by the total volume in the slice and then min-max normalize the data

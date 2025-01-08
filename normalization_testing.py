@@ -37,17 +37,20 @@ def normalize_data(data: torch.Tensor):
 
     return data
 
-data = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode='r')[:16384]
+data = np.load("/home/azureuser/datadrive/test_dataset.npy")
 #print(f"Data nan count: {np.sum(np.isnan(data))}")
 data_torch = torch.from_numpy(data.copy())
 print(f"Data torch zeros count: {torch.sum(torch.sum(data_torch==0))}")
 print(f"Data torch nan count: {torch.sum(torch.isnan(data_torch))}")
-data_torch = data_torch.float()
+#data_torch = data_torch.float()
 
 print(data.shape)
 
 print(f"data zeros count: {np.sum(data == 0)}")
-exit()
+#exit()
+
+
+data_torch = data_torch[0]
 
 normalized_data = normalize_data(data_torch)
 

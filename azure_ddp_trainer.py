@@ -468,8 +468,8 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 2e-4,  # Fixed or configurable as needed
-		'batch_size': 1600,  # Fixed value
+		'lr': 1e-4,  # Fixed or configurable as needed
+		'batch_size': 1536,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
@@ -478,7 +478,7 @@ def main():
 		'epochs': 100,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000040148_epoch_99_mse_tiny_transformer.pth",
-		'max_lr': 7.5e-4
+		'max_lr': 4e-4
 	}
 	
 	setup_env_variables()
