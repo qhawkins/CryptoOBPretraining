@@ -3,6 +3,12 @@ from torch.utils.data import Dataset
 import numpy as np
 import torch
 import os
+import numba as nb
+
+@nb.njit(cache=True)
+def create_slice(index: int, data: np.dtype, temporal_dim: int, sliced: np.dtype):
+	sliced = data[index-temporal_dim:index]
+	return sliced
 
 def min_max_normalize(data: torch.Tensor):
     min_val = torch.min(data)
@@ -99,16 +105,19 @@ class LossIncreaseStopper(Stopper):
 class PretrainingDataset(Dataset):
 	 # Class-level variable to hold the memory map
 
-	def __init__(self, data_path: str, start_idx: int, end_idx: int, temporal_offset: int = 512, depth: int = 96):
+	def __init__(self, data_path: str, start_idx: int, end_idx: int, temporal_offset: int = 512, depth: int = 96, azure: bool = False):
 		
 		self.start_idx = start_idx
 		self.end_idx = end_idx
 		self.offset = temporal_offset
 		self.length = self.end_idx - self.start_idx - self.offset
-		self.data = np.load(data_path, mmap_mode='r')
+		if azure:
+			self.data = np.load("/home/azureuser/datadrive/full_parsed.npy", mmap_mode='r')
+		else:
+			self.data = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", mmap_mode='r')
+
+		self.indices = np.load(data_path)
 		self.temporal_offset = temporal_offset
-		self.depth = depth
-		self.dim_multiplier = temporal_offset*depth*2
 		print(f"PretrainingDataset initialized with {self.length} rows on {'cuda'} in process {os.getpid()}.")
 
 	def __len__(self):
@@ -118,7 +127,10 @@ class PretrainingDataset(Dataset):
 		if isinstance(idx, int):
 			if idx < 0 or idx >= self.length:
 				raise IndexError(f"Index {idx} is out of bounds for dataset with length {self.length}")
-			data_slice: np.array = self.data[idx]
+
+			#data_slice: np.array = self.data[idx]
+			idx = self.indices[idx]+128
+			data_slice: np.array = self.data[idx-self.temporal_offset:idx]
 			data_slice = torch.from_numpy(data_slice.copy())
 			#data_slice = data_slice.clone()
 			normalized = normalize_data(data_slice)

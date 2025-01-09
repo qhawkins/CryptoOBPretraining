@@ -70,7 +70,7 @@ class Trainer:
 		self.val_losses = []
 		
 	def load_model(self, path: str):
-		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), 0.25)
+		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), self.config['dropout'])
 		state_dict = torch.load(path)
 		state_dict = state_dict['model_state_dict']
 		state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -208,21 +208,26 @@ class Trainer:
 			0, 
 			train_size, 
 			self.config['temporal_dim'],
-			self.config['depth_dim']
+			self.config['depth_dim'],
+			azure=self.config['azure']
+
 		)
 		self.val_ds = PretrainingDataset(
 			self.train_dataset,
 			train_size,
 			train_size + val_size,
 			self.config['temporal_dim'],
-			self.config['depth_dim']
+			self.config['depth_dim'],
+			azure=self.config['azure']
+
 		)
 		self.test_ds = PretrainingDataset(
 			self.test_dataset,
 			0, 
 			test_size, 
 			self.config['temporal_dim'],
-			self.config['depth_dim']
+			self.config['depth_dim'],
+			azure=self.config['azure']
 		)
 		
 	def initialize_training_components(self):
@@ -249,12 +254,20 @@ class Trainer:
 	def save_model(self, epoch, val_loss):
 		if self.rank != 0:
 			return  # Only the master process saves the model
-		
-		model_path = (
-			f"/home/azureuser/single_models/{self.model_name}_val_loss_"
-			f"{str(round(val_loss, 8)).replace('.', '')}_epoch_{epoch}_"
-			f"{self.config['loss']}_{self.config['model_size']}.pth"
-		)
+		if self.config['azure']:
+			model_path = (
+				f"/home/azureuser/single_models/{self.model_name}_val_loss_"
+				f"{str(round(val_loss, 8)).replace('.', '')}_epoch_{epoch}_"
+				f"{self.config['loss']}_{self.config['model_size']}.pth"
+			)
+		else:
+			model_path = (
+				f"/media/qhawkins/SSD3/single_models/{self.model_name}_val_loss_"
+				f"{str(round(val_loss, 8)).replace('.', '')}_epoch_{epoch}_"
+				f"{self.config['loss']}_{self.config['model_size']}.pth"
+			)
+
+
 		torch.save({
 			'epoch': epoch,
 			'model_state_dict': self.model.state_dict(),  # Access the underlying model
@@ -305,8 +318,13 @@ class Trainer:
 				self.scaler.step(self.optimizer)
 				self.scaler.update()
 				self.scheduler.step()
-				with open(f"/home/azureuser/single_models/{self.model_name}_epoch_train_losses.txt", "a+") as f:
-					f.write(f"{loss.item()}\n")
+				if self.config['azure']:
+					with open(f"/home/azureuser/single_models/{self.model_name}_epoch_train_losses.txt", "a+") as f:
+						f.write(f"{loss.item()}\n")
+				else:
+					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_epoch_train_losses.txt", "a+") as f:
+						f.write(f"{loss.item()}\n")
+
 				avg_train_loss += loss.item()
 				self.step_losses.append(loss.item())
 			
@@ -328,8 +346,14 @@ class Trainer:
 					with torch.amp.autocast(f"cuda:{self.rank}"):
 						outputs = self.model(masked_inputs)
 						loss = self.criterion(outputs[mask], data[mask])
-					with open(f"/home/azureuser/single_models/{self.model_name}_epoch_val_losses.txt", "a+") as f:
-						f.write(f"{loss.item()}\n")
+
+					if self.config['azure']:
+						with open(f"/home/azureuser/single_models/{self.model_name}_epoch_val_losses.txt", "a+") as f:
+							f.write(f"{loss.item()}\n")
+					else:
+						with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_epoch_val_losses.txt", "a+") as f:
+							f.write(f"{loss.item()}\n")
+
 					avg_val_loss += loss.item()
 				avg_val_loss /= (i + 1)
 			
@@ -339,13 +363,21 @@ class Trainer:
 				self.train_loss_history.append(avg_train_loss)
 				self.val_loss_history.append(avg_val_loss)
 				#self.scheduler.step(avg_val_loss)
-				with open(f"/home/azureuser/single_models/{self.model_name}_train_losses.txt", "a+") as f:
-					f.write(f"{avg_train_loss}\n")
-				with open(f"/home/azureuser/single_models/{self.model_name}_val_losses.txt", "a+") as f:
-					f.write(f"{avg_val_loss}\n")
-				with open(f"/home/azureuser/single_models/{self.model_name}_lr.txt", "a+") as f:
-					f.write(f"{self.scheduler.get_last_lr()[0]}\n")
-					
+				if self.config['azure']:
+					with open(f"/home/azureuser/single_models/{self.model_name}_train_losses.txt", "a+") as f:
+						f.write(f"{avg_train_loss}\n")
+					with open(f"/home/azureuser/single_models/{self.model_name}_val_losses.txt", "a+") as f:
+						f.write(f"{avg_val_loss}\n")
+					with open(f"/home/azureuser/single_models/{self.model_name}_lr.txt", "a+") as f:
+						f.write(f"{self.scheduler.get_last_lr()[0]}\n")
+				else:
+					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_train_losses.txt", "a+") as f:
+						f.write(f"{avg_train_loss}\n")
+					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_val_losses.txt", "a+") as f:
+						f.write(f"{avg_val_loss}\n")
+					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_lr.txt", "a+") as f:
+						f.write(f"{self.scheduler.get_last_lr()[0]}\n")
+
 				print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
 				self.save_model(epoch, avg_val_loss)
 				if avg_val_loss < best_val_loss:
@@ -460,6 +492,7 @@ def main():
 	world_size = 2  # Number of GPUs
 	
 	config = {
+		'azure': False,
 		'model_name': 'pretrained_ddp',
 		'split_ratios': [0.7, 0.25, 0.05],
 		'lr_decay_factor': 0.5,  # Fixed value instead of tune.choice
@@ -468,17 +501,17 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 1536,  # Fixed value
+		'lr': 2e-4,  # Fixed or configurable as needed
+		'batch_size': 1664,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 100,  # Define the number of epochs
+		'epochs': 15,  # Define the number of epochs
 		'load_model': False,
-		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_000040148_epoch_99_mse_tiny_transformer.pth",
-		'max_lr': 4e-4
+		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_003274125_epoch_9_mse_tiny_transformer.pth",
+		'max_lr': 3e-4
 	}
 	
 	setup_env_variables()
@@ -487,9 +520,13 @@ def main():
 	
 	#train_dataset_len = 1599976 #= np.load("/home/azureuser/data/train_dataset.npy", mmap_mode="r").shape[0]
 	#test_dataset_len = 399994#np.load("/home/azureuser/data/test_dataset.npy", mmap_mode="r").shape[0]
-	shared_train_dataset = "/home/azureuser/datadrive/train_dataset.npy"
-	shared_test_dataset = "/home/azureuser/datadrive/test_dataset.npy"
-	#print("numpy loading finished")
+	if config["azure"]:
+		shared_train_dataset = "/home/azureuser/datadrive/train_indices.npy"
+		shared_test_dataset = "/home/azureuser/datadrive/test_indices.npy"
+
+	else:
+		shared_train_dataset = "/home/qhawkins/Desktop/CryptoOBPretraining/train_indices.npy"
+		shared_test_dataset = "/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy"
 	#shared_dataset = torch.from_numpy(shared_dataset)
 	#shared_train_dataset = torch.from_file("/home/azureuser/data/train_dataset.npy", dtype = torch.float32, size=train_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
 	#shared_test_dataset = torch.from_file("/home/azureuser/data/test_dataset.npy", dtype = torch.float32, size=test_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
