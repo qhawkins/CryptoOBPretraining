@@ -34,29 +34,41 @@ class TinyTransformerModel(torch.nn.Module):
         #self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
         
         self.encoder1 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder2 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder3 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder4 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder5 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder6 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder7 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder8 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder9 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder10 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder11 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         self.encoder12 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
+                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                            fuse_qkv_params=True, set_parallel_mode=True)
         
 
     def forward(self, input: torch.Tensor):

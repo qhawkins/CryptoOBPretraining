@@ -131,7 +131,7 @@ class PretrainingDataset(Dataset):
 			data_slice: np.array = self.data[idx-self.temporal_offset:idx]
 			data_slice = torch.from_numpy(data_slice.copy())
 			#data_slice = data_slice.clone()
-			normalized = normalize_data(data_slice).to(torch.float16, non_blocking=True)
+			normalized = normalize_data(data_slice)
 			nan_count = torch.sum(torch.isnan(normalized))
 			if nan_count > 0:
 				print(f"Found {nan_count} nans in slice {idx}")

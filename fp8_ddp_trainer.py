@@ -37,7 +37,7 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 		mask (torch.Tensor): Boolean mask indicating which entries were masked.
 	"""
 	# Generate a mask for 15% of the entries
-	mask = torch.rand(inputs.shape, device=device, requires_grad=False, dtype=torch.float16) < mask_percentage
+	mask = torch.rand(inputs.shape, device=device, requires_grad=False, dtype=torch.float32) < mask_percentage
 	#mask = mask.to(device, non_blocking=True)
 	
 	# Replace masked entries in inputs with mask_value
@@ -107,7 +107,7 @@ class Trainer:
 				(temporal_dim, depth_dim, 2),
 				dropout,
 				#data_parallel_group=self.data_parallel_group
-			).to(torch.float16).to(self.device)
+			).to(self.device)
 			
 			# Compile the model for potential performance benefits
 			#self.model = torch.compile(self.model)
@@ -173,8 +173,9 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=4,
+			num_workers=6,
 			pin_memory=True,
+			prefetch_factor=2,
 		)
 		
 		self.val_dataloader = DataLoader(
@@ -200,6 +201,11 @@ class Trainer:
 
 		train_size = int(self.config['split_ratios'][0] * total_size)
 		val_size = int(self.config['split_ratios'][1] * total_size)
+
+		####
+		#train_size = 10000
+		#val_size = 1000
+		####
 
 		test_size = np.load(self.test_dataset, mmap_mode="r").shape[0]
 		
@@ -505,16 +511,16 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 512,  # Fixed value
+		'batch_size': 256,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 100,  # Define the number of epochs
+		'epochs': 50,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_003274125_epoch_9_mse_tiny_transformer.pth",
-		'max_lr': 3e-4,
+		'max_lr': 2.5e-4,
 		"backend": "nccl"
 	}
 	
