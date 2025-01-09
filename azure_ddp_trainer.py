@@ -77,6 +77,7 @@ class Trainer:
 		self.model.load_state_dict(state_dict)
 		self.model = self.model.to(self.device)
 		self.model = self.model.train()
+		self.model = torch.compile(self.model)
 		#self.model = self.model.compile()
 
 	def initialize_model(self):
@@ -502,15 +503,16 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 1664,  # Fixed value
+		'batch_size': 1600,
+		#'batch_size': 1664,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
 		'epochs': 100,  # Define the number of epochs
-		'load_model': False,
-		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_003274125_epoch_9_mse_tiny_transformer.pth",
+		'load_model': True,
+		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_002186575_epoch_20_mse_tiny_transformer.pth",
 		'max_lr': 3e-4
 	}
 	

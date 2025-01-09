@@ -3,12 +3,7 @@ from torch.utils.data import Dataset
 import numpy as np
 import torch
 import os
-import numba as nb
 
-@nb.njit(cache=True)
-def create_slice(index: int, data: np.dtype, temporal_dim: int, sliced: np.dtype):
-	sliced = data[index-temporal_dim:index]
-	return sliced
 
 def min_max_normalize(data: torch.Tensor):
     min_val = torch.min(data)
@@ -133,7 +128,7 @@ class PretrainingDataset(Dataset):
 			data_slice: np.array = self.data[idx-self.temporal_offset:idx]
 			data_slice = torch.from_numpy(data_slice.copy())
 			#data_slice = data_slice.clone()
-			normalized = normalize_data(data_slice)
+			normalized = normalize_data(data_slice).to(torch.float16, non_blocking=True)
 			nan_count = torch.sum(torch.isnan(normalized))
 			if nan_count > 0:
 				print(f"Found {nan_count} nans in slice {idx}")

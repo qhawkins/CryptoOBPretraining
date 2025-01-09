@@ -1,6 +1,5 @@
 import transformer_engine.pytorch as te
 import torch
-from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
     
 class TinyTransformerModel(torch.nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
@@ -34,66 +33,6 @@ class TinyTransformerModel(torch.nn.Module):
 
         #self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
         
-        self.encoder1 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder2 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder3 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder4 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder5 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder6 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder1 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder2 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder3 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder4 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder5 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder6 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder1 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder2 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder3 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder4 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder5 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder6 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder1 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder2 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder3 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder4 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder5 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder6 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder1 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder2 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder3 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder4 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder5 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
-        self.encoder6 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
-                                            num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
         self.encoder1 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400, 
                                             num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout)
         self.encoder2 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,

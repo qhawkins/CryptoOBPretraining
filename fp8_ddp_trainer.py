@@ -20,6 +20,7 @@ from fp8_models import TinyTransformerModel
 from transformer_engine.common.recipe import Format, DelayedScaling
 import transformer_engine.pytorch as te
 
+
 # Define your apply_mask function (unchanged)
 def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, device='cuda'):
 	"""
@@ -36,8 +37,8 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 		mask (torch.Tensor): Boolean mask indicating which entries were masked.
 	"""
 	# Generate a mask for 15% of the entries
-	mask = torch.rand(inputs.shape, device=device, requires_grad=False, dtype=torch.bfloat16) < mask_percentage
-	mask = mask.to(device, non_blocking=True)
+	mask = torch.rand(inputs.shape, device=device, requires_grad=False, dtype=torch.float16) < mask_percentage
+	#mask = mask.to(device, non_blocking=True)
 	
 	# Replace masked entries in inputs with mask_value
 	masked_inputs = inputs.clone()
@@ -47,14 +48,14 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 
 # Adapted Trainer class with DDP support
 class Trainer:
-	def __init__(self, config, rank, world_size, data_parallel_group, train_dataset, test_dataset):
+	def __init__(self, config, rank, world_size, train_dataset, test_dataset, dp_group):
 		self.config = config
 		self.train_dataset = train_dataset
 		self.test_dataset = test_dataset
 		self.rank = rank
 		self.world_size = world_size
+		self.dp_group = dp_group
 		self.device = torch.device(f'cuda:{rank}' if torch.cuda.is_available() else 'cpu')
-		self.data_parallel_group = data_parallel_group
 		# Initialize the model
 		self.initialize_model()
 		
@@ -70,7 +71,7 @@ class Trainer:
 		self.val_losses = []
 		
 		fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
-		self.recipe = DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
+		self.recipe = DelayedScaling(fp8_format=fp8_format)
 	
 		
 	def load_model(self, path: str):
@@ -104,14 +105,15 @@ class Trainer:
 			self.model = model_classes[model_size](
 				(temporal_dim, depth_dim, 2),
 				(temporal_dim, depth_dim, 2),
-				dropout
-			).to(self.device)
+				dropout,
+				#data_parallel_group=self.data_parallel_group
+			).to(torch.float16).to(self.device)
 			
 			# Compile the model for potential performance benefits
-			self.model = torch.compile(self.model)
+			#self.model = torch.compile(self.model)
 			
 			# Wrap the model with DDP
-		self.model = DDP(self.model, device_ids=[self.rank], process_group=self.data_parallel_group)
+		self.model = DDP(self.model, device_ids=[self.rank])#, process_group=self.data_parallel_group)
 		
 	def initialize_criterion_optimizer(self):
 		loss_type = self.config['loss']
@@ -171,7 +173,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=8,
+			num_workers=0,
 			pin_memory=True,
 		)
 		
@@ -180,7 +182,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.val_sampler,
 			drop_last=True,
-			num_workers=8,
+			num_workers=0,
 			pin_memory=True,
 		)
 		
@@ -189,7 +191,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.test_sampler,
 			drop_last=True,
-			num_workers=8,
+			num_workers=0,
 			pin_memory=True,
 		)
 		
@@ -208,7 +210,6 @@ class Trainer:
 			self.config['temporal_dim'],
 			self.config['depth_dim'],
 			azure=self.config['azure']
-
 		)
 		self.val_ds = PretrainingDataset(
 			self.train_dataset,
@@ -307,7 +308,7 @@ class Trainer:
 				
 				self.optimizer.zero_grad()
 				
-				with te.fp8_autocast(recipe=self.recipe):
+				with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 					outputs = self.model(masked_inputs)
 					loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
 				
@@ -339,7 +340,7 @@ class Trainer:
 						device=self.device
 					)
 					
-					with te.fp8_autocast(recipe=self.recipe):
+					with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 						outputs = self.model(masked_inputs)
 						loss = self.criterion(outputs[mask], data[mask])
 
@@ -413,7 +414,7 @@ class Trainer:
 					mask_value=0.0,
 					device=self.device
 				)
-				with te.fp8_autocast(recipe=self.recipe):
+				with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 					outputs = self.model(masked_inputs)
 					loss = self.criterion(outputs[mask], data[mask])
 					test_loss += loss.item()
@@ -433,7 +434,7 @@ class Trainer:
 					device=self.device
 				)
 				
-				with te.fp8_autocast(recipe=self.recipe):
+				with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 					outputs = self.model(masked_inputs)
 					loss = mae_loss(outputs[mask], data[mask])
 					test_loss += loss.item()
@@ -455,17 +456,28 @@ class Trainer:
 		plt.show()
 
 def main_worker(rank, world_size, config, train_dataset, test_dataset):
+	#os.environ['MASTER_ADDR'] = 'localhost'
+	#os.environ['MASTER_PORT'] = '12355'
+	os.environ["MASTER_ADDR"] = "localhost"
+	os.environ["MASTER_PORT"] = "5000"
+	#os.environ['MASTER_ADDR'] = '127.0.0.1'
+	#os.environ['MASTER_PORT'] = '8000'
+	#os.environ["NCCL_SOCKET_IFNAME"] = "eno1"
+	
 	# Initialize the process group
 	dist.init_process_group(
-		backend='nccl',
+		backend=config['backend'],
 		init_method='env://',
 		world_size=world_size,
 		rank=rank
 	)
-	data_parallel_group = torch.distributed.new_group(ranks=[rank], backend="nccl")
+	data_parallel_group = torch.distributed.new_group(ranks=[rank], backend=config['backend'])
+	
 
 	# Create a Trainer instance
-	trainer = Trainer(config, rank, world_size, data_parallel_group=data_parallel_group, train_dataset=train_dataset, test_dataset=test_dataset)
+	torch.cuda.set_device(rank)
+
+	trainer = Trainer(config, rank, world_size, train_dataset=train_dataset, test_dataset=test_dataset, dp_group=data_parallel_group)
 	
 	# Train the model
 	trainer.train(epochs=config['epochs'])
@@ -478,10 +490,6 @@ def main_worker(rank, world_size, config, train_dataset, test_dataset):
 	
 	# Cleanup
 	dist.destroy_process_group()
-
-def setup_env_variables():
-	os.environ['MASTER_ADDR'] = 'localhost'
-	os.environ['MASTER_PORT'] = '12355'
 
 def main():
 	world_size = 2  # Number of GPUs
@@ -497,7 +505,7 @@ def main():
 		'dropout': 0.25,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 1664,  # Fixed value
+		'batch_size': 512,  # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 128,
@@ -506,12 +514,13 @@ def main():
 		'epochs': 100,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_003274125_epoch_9_mse_tiny_transformer.pth",
-		'max_lr': 3e-4
+		'max_lr': 3e-4,
+		"backend": "nccl"
 	}
 	
-	setup_env_variables()
-	
-	torch.multiprocessing.set_sharing_strategy('file_system')
+	#torch.multiprocessing.set_sharing_strategy('file_system')
+	mp.set_start_method('spawn')
+
 	
 	#train_dataset_len = 1599976 #= np.load("/home/azureuser/data/train_dataset.npy", mmap_mode="r").shape[0]
 	#test_dataset_len = 399994#np.load("/home/azureuser/data/test_dataset.npy", mmap_mode="r").shape[0]
@@ -551,4 +560,8 @@ def main():
 	"""
 	
 if __name__ == '__main__':
+	#os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
+	#os.environ["NCCL_DEBUG"] = "DEBUG"
+	#os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1"
+
 	main()
