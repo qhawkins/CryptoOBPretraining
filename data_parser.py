@@ -157,7 +157,13 @@ def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128
             
 if __name__ == "__main__":
     depth = 96
-    raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
+    azure = False
+    if azure:
+        raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
+    
+    else:
+        raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
+
     #raw_data = raw_data.iloc
     raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
@@ -194,15 +200,18 @@ if __name__ == "__main__":
 
     #drop any rows with 0s
     print(f"Ob_state shape: {ob_state.shape}")
-    ob_state = ob_state[~np.any(ob_state == 0, axis=(1, 2))]
-    print("Sliced")
+    #ob_state = ob_state[~np.any(ob_state == 0, axis=(1, 2))]
+    #print("Sliced")
     #print(ob_state[-1, :, 0])
     #ob_state = ob_state/1e7
     #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
-    print(f"Ob_state shape: {ob_state.shape}")
-    np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
+    #print(f"Ob_state shape: {ob_state.shape}")
+    if azure:
+        np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
     
+    else:
+        np.save("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", ob_state)
     
     
     #ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)

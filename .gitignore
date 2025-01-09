@@ -3,3 +3,5 @@ test.npy
 test.pt
 full_parsed.pt
 full_parsed.npy
+test_indices.npy
+train_indices.npy

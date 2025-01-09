@@ -15,10 +15,10 @@ torch.backends.cudnn.allow_tf32 = True
 
 # Import your existing classes and functions
 from training_classes import PretrainingDataset
-from models import (
-	SmallFCModel, MediumFCModel, LargeFCModel,
-	ShallowLSTMModel, DeepLSTMModel, TinyLSTMModel, TinyTransformerModel
-)
+from fp8_models import TinyTransformerModel
+
+from transformer_engine.common.recipe import Format, DelayedScaling
+import transformer_engine.pytorch as te
 
 # Define your apply_mask function (unchanged)
 def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, device='cuda'):
@@ -69,6 +69,10 @@ class Trainer:
 		self.train_losses = []
 		self.val_losses = []
 		
+		fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
+		self.recipe = DelayedScaling(fp8_format=fp8_format, amax_history_len=16, amax_compute_algo="max")
+	
+		
 	def load_model(self, path: str):
 		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), self.config['dropout'])
 		state_dict = torch.load(path)
@@ -86,12 +90,6 @@ class Trainer:
 		dropout = self.config['dropout']
 		
 		model_classes = {
-			'small': SmallFCModel,
-			'medium': MediumFCModel,
-			'large': LargeFCModel,
-			'shallow_lstm': ShallowLSTMModel,
-			'deep_lstm': DeepLSTMModel,
-			'tiny_lstm': TinyLSTMModel,
 			'tiny_transformer': TinyTransformerModel
 		}
 		
@@ -244,7 +242,6 @@ class Trainer:
 			epochs=self.config["epochs"],
 			steps_per_epoch=len(self.train_dataloader)
 		)
-		self.scaler = torch.amp.GradScaler(f"cuda:{self.rank}")
 		self.early_stopping_patience = self.config['early_stopping_patience']
 		self.saved_models = deque(maxlen=self.early_stopping_patience + 1)
 		self.best_val_loss = float('inf')
@@ -310,13 +307,12 @@ class Trainer:
 				
 				self.optimizer.zero_grad()
 				
-				with torch.amp.autocast(f"cuda:{self.rank}"):
+				with te.fp8_autocast(recipe=self.recipe):
 					outputs = self.model(masked_inputs)
-					loss = self.criterion(outputs[mask], data[mask])
+					loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
 				
-				self.scaler.scale(loss).backward()
-				self.scaler.step(self.optimizer)
-				self.scaler.update()
+				loss.backward()
+				self.optimizer.step()
 				self.scheduler.step()
 				if self.config['azure']:
 					with open(f"/home/azureuser/single_models/{self.model_name}_epoch_train_losses.txt", "a+") as f:
@@ -343,7 +339,7 @@ class Trainer:
 						device=self.device
 					)
 					
-					with torch.amp.autocast(f"cuda:{self.rank}"):
+					with te.fp8_autocast(recipe=self.recipe):
 						outputs = self.model(masked_inputs)
 						loss = self.criterion(outputs[mask], data[mask])
 
@@ -417,8 +413,7 @@ class Trainer:
 					mask_value=0.0,
 					device=self.device
 				)
-				
-				with torch.amp.autocast(f"cuda:{self.rank}"):
+				with te.fp8_autocast(recipe=self.recipe):
 					outputs = self.model(masked_inputs)
 					loss = self.criterion(outputs[mask], data[mask])
 					test_loss += loss.item()
@@ -438,7 +433,7 @@ class Trainer:
 					device=self.device
 				)
 				
-				with torch.amp.autocast(f"cuda:{self.rank}"):
+				with te.fp8_autocast(recipe=self.recipe):
 					outputs = self.model(masked_inputs)
 					loss = mae_loss(outputs[mask], data[mask])
 					test_loss += loss.item()
@@ -492,7 +487,7 @@ def main():
 	world_size = 2  # Number of GPUs
 	
 	config = {
-		'azure': True,
+		'azure': False,
 		'model_name': 'pretrained_ddp',
 		'split_ratios': [0.7, 0.25, 0.05],
 		'lr_decay_factor': 0.5,  # Fixed value instead of tune.choice
