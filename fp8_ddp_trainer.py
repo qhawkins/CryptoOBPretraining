@@ -173,7 +173,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=4,
 			pin_memory=True,
 		)
 		
@@ -182,7 +182,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.val_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=4,
 			pin_memory=True,
 		)
 		
@@ -191,7 +191,7 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.test_sampler,
 			drop_last=True,
-			num_workers=0,
+			num_workers=4,
 			pin_memory=True,
 		)
 		

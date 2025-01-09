@@ -106,11 +106,7 @@ class PretrainingDataset(Dataset):
 		self.end_idx = end_idx
 		self.offset = temporal_offset
 		self.length = self.end_idx - self.start_idx - self.offset
-		if azure:
-			self.data = np.load("/home/azureuser/datadrive/full_parsed.npy", mmap_mode='r')
-		else:
-			self.data = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", mmap_mode='r')
-
+		self.azure = azure
 		self.indices = np.load(data_path)
 		self.temporal_offset = temporal_offset
 		print(f"PretrainingDataset initialized with {self.length} rows on {'cuda'} in process {os.getpid()}.")
@@ -125,6 +121,13 @@ class PretrainingDataset(Dataset):
 
 			#data_slice: np.array = self.data[idx]
 			idx = self.indices[idx]+128
+
+			if self.azure:
+				self.data = np.load("/home/azureuser/datadrive/full_parsed.npy", mmap_mode='r')
+			else:
+				self.data = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", mmap_mode='r')
+
+
 			data_slice: np.array = self.data[idx-self.temporal_offset:idx]
 			data_slice = torch.from_numpy(data_slice.copy())
 			#data_slice = data_slice.clone()
