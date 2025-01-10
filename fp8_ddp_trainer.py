@@ -109,9 +109,6 @@ class Trainer:
 				#data_parallel_group=self.data_parallel_group
 			).to(self.device)
 			
-			# Compile the model for potential performance benefits
-			self.model = torch.compile(self.model)
-			
 			# Wrap the model with DDP
 		self.model = DDP(self.model, device_ids=[self.rank])#, process_group=self.data_parallel_group)
 		

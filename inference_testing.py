@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", mmap_mode='r').shape[0]
     model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
-    state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000205646_epoch_1_mse_tiny_transformer.pth")
+    state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_00017559_epoch_1_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     model.eval()
     print("Model loaded")
     dataset = PretrainingDataset("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", 0, len_dataset, 128, 96)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=512, shuffle=False, num_workers=8)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=2048, shuffle=False, num_workers=8)
     loss_fn = torch.nn.MSELoss().cuda()
     #model.compile()
 

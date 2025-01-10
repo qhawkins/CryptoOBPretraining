@@ -5,16 +5,16 @@ import os
 
 # Configuration
 azure = False
-most_recent = 35000  # Adjust this value based on your needs
+most_recent = 5000  # Adjust this value based on your needs
 
 # File paths
 if azure:
-    train_loss_path = "/home/qhawkins/Downloads/pretrained_ddp_epoch_train_losses.txt"
-    # val_loss_path = "/home/qhawkins/Downloads/pretrained_ddp_epoch_val_losses.txt"
+    loss_path = "/home/qhawkins/Downloads/pretrained_ddp_epoch_train_losses.txt"
+    #loss_path = "/home/qhawkins/Downloads/pretrained_ddp_epoch_val_losses.txt"
     # lr_path = "/home/qhawkins/Downloads/pretrained_ddp_lr.txt"
 else:
-    train_loss_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_epoch_train_losses.txt"
-    # val_loss_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_epoch_val_losses.txt"
+    loss_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_epoch_train_losses.txt"
+    #loss_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_epoch_val_losses.txt"
     # lr_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_lr.txt"
 
 def read_train_losses():
@@ -22,12 +22,12 @@ def read_train_losses():
     Reads the training losses from the specified file.
     Returns a list of floats representing the loss values.
     """
-    if not os.path.exists(train_loss_path):
-        print(f"Train loss file not found: {train_loss_path}")
+    if not os.path.exists(loss_path):
+        print(f"Train loss file not found: {loss_path}")
         return []
     
     try:
-        with open(train_loss_path, "r") as f:
+        with open(loss_path, "r") as f:
             lines = f.readlines()
         # Convert lines to floats, ignoring any malformed lines
         train_losses = [float(line.strip()) for line in lines if line.strip()]

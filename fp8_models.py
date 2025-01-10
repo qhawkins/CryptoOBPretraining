@@ -1,6 +1,7 @@
 import transformer_engine.pytorch as te
 import torch
     
+    
 class TinyTransformerModel(torch.nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
         super().__init__()
@@ -9,13 +10,29 @@ class TinyTransformerModel(torch.nn.Module):
         self.temporal_dim = input_shape[0]
         self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
         self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.base = 10000.0
+        half_dim = (self.features_dim * self.depth_dim) // 2
 
-        position = torch.arange(self.temporal_dim).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, self.features_dim*self.depth_dim, 2) * (-torch.log((torch.tensor(10000.0))) / self.features_dim*self.depth_dim))
-        pe = torch.zeros(1, self.temporal_dim, self.features_dim*self.depth_dim)
-        pe[0, :, 0::2] = torch.sin(position * div_term)
-        pe[0, :, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+        # Create position indices [0, 1, ..., T-1]
+        position = torch.arange(self.temporal_dim, dtype=torch.float32).unsqueeze(1)  # (T, 1)
+
+        # Compute the inverse frequencies
+        div_term = torch.exp(
+            torch.arange(0, half_dim, dtype=torch.float32) * (-torch.log(torch.tensor(self.base)) / half_dim)
+        )  # (half_dim,)
+
+        # Compute the angles (T, half_dim)
+        angles = position * div_term  # (T, half_dim)
+
+        # Compute sin and cos
+        sin = torch.sin(angles).requires_grad_(False)  # (T, half_dim)
+        cos = torch.cos(angles).requires_grad_(False)  # (T, half_dim)
+        sin = sin.unsqueeze(0).unsqueeze(-1)  # (1, T, 1, F//2)
+        cos = cos.unsqueeze(0).unsqueeze(-1)
+
+        # Register as buffers to ensure they are moved with the model and not trained
+        self.register_buffer('sin', sin)  # (T, half_dim)
+        self.register_buffer('cos', cos)  # (T, half_dim)
 
         self.embedding_layer = te.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
         #self.embedding_layer = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
@@ -26,10 +43,6 @@ class TinyTransformerModel(torch.nn.Module):
         self.output_fc = te.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
         self.output_dropout = torch.nn.Dropout(dropout)
         self.output_relu = torch.nn.ReLU()
-
-
-
-
 
         #self.positional_encoder = Summer(PositionalEncoding1D(self.features_dim*self.depth_dim))
         
@@ -113,54 +126,69 @@ class TinyTransformerModel(torch.nn.Module):
                                                     fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
                                                     parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
 
+    def apply_rotary_pos_emb(self, x: torch.Tensor, sin: torch.Tensor, cos: torch.Tensor) -> torch.Tensor:
+        """
+        Applies Rotary Positional Embeddings to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, T, F).
+            sin (torch.Tensor): Sine embeddings of shape (T, F/2).
+            cos (torch.Tensor): Cosine embeddings of shape (T, F/2).
+
+        Returns:
+            torch.Tensor: Tensor with RoPE applied, shape (B, T, F).
+        """
+        # Ensure the feature dimension is even
+        assert x.size(-1) % 2 == 0, "Feature dimension must be even for RoPE."
+
+        # Split the features into even and odd
+        x_even = x[..., 0::2]  # (B, T, F/2)
+        x_odd = x[..., 1::2]   # (B, T, F/2)
+
+        # Apply rotation
+        x_rotated_even = x_even * cos - x_odd * sin
+        x_rotated_odd = x_even * sin + x_odd * cos
+
+        # Interleave the rotated even and odd features
+        x_rotated = torch.stack((x_rotated_even, x_rotated_odd), dim=-1).reshape_as(x)  # (B, T, D, F)
+
+        return x_rotated
+
 
     def forward(self, input: torch.Tensor):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
-        self.input = input.view(-1, self.temporal_dim, self.features_dim * self.depth_dim)
-        self.input = self.input + self.pe[:input.size(1)]
+        input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, D, F)
+
+        input = input.view(-1, self.temporal_dim, self.features_dim * self.depth_dim)
+        #input = input + self.pe[:input.size(1)]
         
-        self.embedding = self.embedding_layer(self.input)
-        self.embedding = self.embedding_relu(self.embedding)
-        self.embedding = self.embedding_dropout(self.embedding)
+        embedding = self.embedding_layer(input)
+        embedding = self.embedding_relu(embedding)
+        embedding = self.embedding_dropout(embedding)
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
-        self.output = self.encoder1(self.embedding)
-        self.output = self.encoder2(self.output)
-        self.output = self.encoder3(self.output)
-        self.output = self.encoder4(self.output)
-        self.output = self.encoder5(self.output)
-        self.output = self.encoder6(self.output)
-        self.output = self.encoder7(self.output)
-        self.output = self.encoder8(self.output)
-        self.output = self.encoder9(self.output)
-        self.output = self.encoder10(self.output)
-        self.output = self.encoder11(self.output)
-        self.output = self.encoder12(self.output)
-        self.output = self.encoder13(self.output)
-        self.output = self.encoder14(self.output)
-        self.output = self.encoder15(self.output)
-        self.output = self.encoder16(self.output)
+        output = self.encoder1(embedding)
+        output = self.encoder2(output)
+        output = self.encoder3(output)
+        output = self.encoder4(output)
+        output = self.encoder5(output)
+        output = self.encoder6(output)
+        output = self.encoder7(output)
+        output = self.encoder8(output)
+        output = self.encoder9(output)
+        output = self.encoder10(output)
+        output = self.encoder11(output)
+        output = self.encoder12(output)
+        output = self.encoder13(output)
+        output = self.encoder14(output)
+        output = self.encoder15(output)
+        output = self.encoder16(output)
         
-        self.output = self.output_fc(self.output)
-        self.output = self.output_relu(self.output)
-        self.output = self.output_dropout(self.output)
-        x = self.output.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        output = self.output_fc(output)
+        output = self.output_relu(output)
+        output = self.output_dropout(output)
+        x = output.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
 
-
-        '''
-        self.output1 = self.transformer1(self.embedding)
-        self.output2 = self.transformer2(self.output1+self.embedding)
-        self.output3 = self.transformer3(self.output1+self.output2+self.embedding)
-        self.output4 = self.transformer4(self.output1+self.output2+self.output3+self.embedding)
-        self.output5 = self.transformer5(self.output1+self.output2+self.output3+self.output4+self.embedding)
-        self.output6 = self.transformer6(self.output1+self.output2+self.output3+self.output4+self.output5+self.embedding)
-
-        self.output7 = self.output_fc(self.output1+self.output2+self.output3+self.output4+self.output5+self.output6+self.embedding)
-        self.output7 = self.output_dropout(self.output7)
-        self.output7 = self.output_relu(self.output7)
-        x = self.output7.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
-        
-        '''
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x
