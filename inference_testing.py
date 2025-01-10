@@ -1,7 +1,9 @@
-from models import SmallFCModel, MediumFCModel, LargeFCModel, TinyLSTMModel, DeepLSTMModel, ShallowLSTMModel, TinyTransformerModel
+from fp8_models import TinyTransformerModel
 from training_classes import normalize_data, PretrainingDataset
 import torch
 import numpy as np
+import transformer_engine.pytorch as te
+from transformer_engine.common.recipe import Format, DelayedScaling
 
 def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, device='cuda'):
     """
@@ -28,7 +30,7 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
     return masked_inputs.cuda(), mask.cuda()
 
 def load_model(path: str):
-    model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
+    model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.0)
     state_dict = torch.load(path)
     state_dict = state_dict['model_state_dict']
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -38,9 +40,13 @@ def load_model(path: str):
     return model
 
 if __name__ == "__main__":
-    len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode='r').shape[0]
+    format = Format.HYBRID
+    recipe = DelayedScaling(fp8_format=format)
+
+
+    len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", mmap_mode='r').shape[0]
     model = TinyTransformerModel((128, 96, 2), (128, 96, 2), 0.25)
-    state_dict = torch.load("/home/qhawkins/Downloads/pretrained_ddp_val_loss_003274125_epoch_9_mse_tiny_transformer.pth")
+    state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000205646_epoch_1_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -48,10 +54,10 @@ if __name__ == "__main__":
     model.to("cuda")
     model.eval()
     print("Model loaded")
-    dataset = PretrainingDataset("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", 0, len_dataset, 128, 96)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=4096, shuffle=False, num_workers=8)
+    dataset = PretrainingDataset("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", 0, len_dataset, 128, 96)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=512, shuffle=False, num_workers=8)
     loss_fn = torch.nn.MSELoss().cuda()
-    model.compile()
+    #model.compile()
 
 
     loss_values = []
@@ -63,15 +69,16 @@ if __name__ == "__main__":
             device='cuda'
         )
         with torch.no_grad():
-            with torch.amp.autocast(device_type='cuda'):
+            with te.fp8_autocast(enabled=True, fp8_recipe=recipe):
+            #with torch.amp.autocast(device_type='cuda'):
                 data = data.cuda()
                 outputs = model(masked_inputs)  # Shape: (batch_size, seq_length -1, features)
-                loss_val = loss_fn(outputs[mask], data[mask])
-                print(f"Data masked: {data[mask]}, outputs masked: {outputs[mask]}")
-                #exit()
-                mean_loss = torch.mean(loss_val).cpu()
-                print(f"Mean loss: {mean_loss} for epoch {idx}")
-                loss_values.append(mean_loss)
+            loss_val = loss_fn(outputs[mask], data[mask])
+            print(f"Data masked: {data[mask]}, outputs masked: {outputs[mask]}")
+            #exit()
+            mean_loss = torch.mean(loss_val).cpu()
+            print(f"Mean loss: {mean_loss} for epoch {idx}")
+            loss_values.append(mean_loss)
         
                 #exit()
 

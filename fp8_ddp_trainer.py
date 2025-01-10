@@ -82,7 +82,7 @@ class Trainer:
 		self.model.load_state_dict(state_dict)
 		self.model = self.model.to(self.device)
 		self.model = self.model.train()
-		#self.model = self.model.compile()
+		self.model = self.model.compile()
 
 	def initialize_model(self):
 		model_size = self.config['model_size']
@@ -110,7 +110,7 @@ class Trainer:
 			).to(self.device)
 			
 			# Compile the model for potential performance benefits
-			#self.model = torch.compile(self.model)
+			self.model = torch.compile(self.model)
 			
 			# Wrap the model with DDP
 		self.model = DDP(self.model, device_ids=[self.rank])#, process_group=self.data_parallel_group)
@@ -173,9 +173,9 @@ class Trainer:
 			batch_size=self.config['batch_size'],
 			sampler=self.train_sampler,
 			drop_last=True,
-			num_workers=6,
+			num_workers=5,
 			pin_memory=True,
-			prefetch_factor=2,
+			prefetch_factor=4,
 		)
 		
 		self.val_dataloader = DataLoader(
@@ -295,6 +295,8 @@ class Trainer:
 		self.print_model_params()
 		best_val_loss = float('inf')
 		epochs_without_improvement = 0
+		if self.rank == 0:
+			print(f"Start time for training: {time.ctime()}")
 		
 		for epoch in range(epochs):
 			epoch_start_time = time.time()
@@ -381,7 +383,11 @@ class Trainer:
 					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_lr.txt", "a+") as f:
 						f.write(f"{self.scheduler.get_last_lr()[0]}\n")
 
-				print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
+				epoch_completion_time = epoch_end_time-epoch_start_time
+				#given the current system time and the time it took to complete the previous epoch, I want to estimate the system time at the completion of the next epoch
+				next_epoch_estimated_time = time.ctime(time.time() + epoch_completion_time)
+
+				print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
 				self.save_model(epoch, avg_val_loss)
 				if avg_val_loss < best_val_loss:
 					best_val_loss = avg_val_loss
@@ -508,7 +514,7 @@ def main():
 		'lr_decay_patience': 5,
 		'early_stopping_patience': 15,
 		'best_model_path': "best_model.pth",
-		'dropout': 0.25,  # Fixed value instead of tune.choice
+		'dropout': 0.0,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-4,  # Fixed or configurable as needed
 		'batch_size': 256,  # Fixed value
@@ -517,7 +523,7 @@ def main():
 		'temporal_dim': 128,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 50,  # Define the number of epochs
+		'epochs': 25,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_003274125_epoch_9_mse_tiny_transformer.pth",
 		'max_lr': 2.5e-4,
