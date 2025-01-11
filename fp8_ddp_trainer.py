@@ -82,7 +82,7 @@ class Trainer:
 		self.model.load_state_dict(state_dict)
 		self.model = self.model.to(self.device)
 		self.model = self.model.train()
-		self.model = self.model.compile()
+		#self.model = self.model.compile()
 
 	def initialize_model(self):
 		model_size = self.config['model_size']
@@ -318,6 +318,7 @@ class Trainer:
 					loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
 				
 				loss.backward()
+				torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=2.5)
 				self.optimizer.step()
 				self.scheduler.step()
 				if self.config['azure']:
@@ -521,8 +522,8 @@ def main():
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
 		'epochs': 25,  # Define the number of epochs
-		'load_model': False,
-		'model_path': "/home/azureuser/single_models/pretrained_ddp_val_loss_003274125_epoch_9_mse_tiny_transformer.pth",
+		'load_model': True,
+		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000121314_epoch_2_mse_tiny_transformer.pth",
 		'max_lr': 2.5e-4,
 		"backend": "nccl"
 	}
