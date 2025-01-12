@@ -311,18 +311,18 @@ class Trainer:
 					device=self.device
 				)
 				
-				if i + 1 % self.config["accumulation_steps"] != 0:
+				if (i + 1) % self.config["accumulation_steps"] != 0:
 					with self.model.no_sync():				
 						with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 							outputs = self.model(masked_inputs)
-						loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
-						loss /= self.config["accumulation_steps"]
+							loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
+						#loss = loss / self.config["accumulation_steps"]
 						loss.backward()
 				else:
 					with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 						outputs = self.model(masked_inputs)
-					loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
-					loss /= self.config["accumulation_steps"]
+						loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
+					#	loss = loss/ self.config["accumulation_steps"]
 					loss.backward()
 					torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config["max_grad_norm"])
 					self.optimizer.step()
@@ -523,19 +523,19 @@ def main():
 		'dropout': 0.0,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 128,  # Fixed value
+		'batch_size': 144, # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 256,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 25,  # Define the number of epochs
+		'epochs': 30,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000121314_epoch_2_mse_tiny_transformer.pth",
 		'max_lr': 2.5e-4,
 		"backend": "nccl",
-		"accumulation_steps": 8,
-		"max_grad_norm": 1.0
+		"accumulation_steps": 4,
+		"max_grad_norm": 1.5
 	}
 	
 	#torch.multiprocessing.set_sharing_strategy('file_system')

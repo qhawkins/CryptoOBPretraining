@@ -34,10 +34,10 @@ class TinyTransformerModel(torch.nn.Module):
         self.register_buffer('sin', sin)  # (T, half_dim)
         self.register_buffer('cos', cos)  # (T, half_dim)
 
-        self.embedding_layer = te.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
+        #self.embedding_layer = te.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
         #self.embedding_layer = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
-        self.embedding_dropout = torch.nn.Dropout(dropout)
-        self.embedding_relu = torch.nn.ReLU()
+        #self.embedding_dropout = torch.nn.Dropout(dropout)
+        #self.embedding_relu = torch.nn.ReLU()
 
         #self.output_fc = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
         self.output_fc = te.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
@@ -184,12 +184,12 @@ class TinyTransformerModel(torch.nn.Module):
         input = input.view(-1, self.temporal_dim, self.features_dim * self.depth_dim)
         #input = input + self.pe[:input.size(1)]
         
-        embedding = self.embedding_layer(input)
-        embedding = self.embedding_relu(embedding)
-        embedding = self.embedding_dropout(embedding)
+        #embedding = self.embedding_layer(input)
+        #embedding = self.embedding_relu(embedding)
+        #embedding = self.embedding_dropout(embedding)
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
-        output = self.encoder1(embedding)
+        output = self.encoder1(input)
         output = self.encoder2(output)
         output = self.encoder3(output)
         output = self.encoder4(output)
