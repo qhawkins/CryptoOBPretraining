@@ -105,7 +105,7 @@ class TinyTransformerModel(torch.nn.Module):
                                             num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
                                             fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
                                             parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
-
+        """
         self.encoder13 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
                                                     num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
                                                     fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
@@ -125,6 +125,27 @@ class TinyTransformerModel(torch.nn.Module):
                                                     num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
                                                     fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
                                                     parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
+
+        
+        self.encoder17 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
+                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
+                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
+        
+        self.encoder18 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
+                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
+                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
+        
+        self.encoder19 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
+                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
+                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
+        
+        self.encoder20 = te.TransformerLayer(hidden_size=self.features_dim*self.depth_dim, ffn_hidden_size=6400,
+                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
+                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
+                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")"""
 
     def apply_rotary_pos_emb(self, x: torch.Tensor, sin: torch.Tensor, cos: torch.Tensor) -> torch.Tensor:
         """
@@ -180,11 +201,14 @@ class TinyTransformerModel(torch.nn.Module):
         output = self.encoder10(output)
         output = self.encoder11(output)
         output = self.encoder12(output)
-        output = self.encoder13(output)
-        output = self.encoder14(output)
-        output = self.encoder15(output)
-        output = self.encoder16(output)
-        
+        #output = self.encoder13(output)
+        #output = self.encoder14(output)
+        #output = self.encoder15(output)
+        #output = self.encoder16(output)
+        #output = self.encoder17(output)
+        #output = self.encoder18(output)
+        #output = self.encoder19(output)
+        #output = self.encoder20(output)
         output = self.output_fc(output)
         output = self.output_relu(output)
         output = self.output_dropout(output)
