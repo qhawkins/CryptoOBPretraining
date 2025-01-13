@@ -111,7 +111,7 @@ def switch_padding(levels: np.array):
 
 
 @numba.njit(cache=True)
-def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128):
+def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128, subsample: int = 10):
     flag = False
     max_size = max_size + 16
     buys = np.zeros((max_size//2, 2), dtype=np.float32)
@@ -119,8 +119,8 @@ def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128
     consolidated = np.zeros((max_size, 2), dtype=np.float32)
     
     for idx, row in enumerate(arr):
-        if idx % 1000000 == 0:
-            print(f"Processing row {idx}, number of 0s in snapshots: {np.sum(snapshots[idx-1000000:idx] == 0)}")
+        if idx % 10000000 == 0:
+            print(f"Processing row {idx//10}, number of 0s in snapshots: {np.sum(snapshots[(idx//10)-1000000:(idx//10)] == 0)}")        
         price = row[2]
         size = row[3]
         update_type = row[0]
@@ -149,58 +149,26 @@ def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128
         if flag is False:
             start_idx = idx
             flag = True
-        #if 0.0 in consolidated[8:-8, :]:
-        #    continue
-        snapshots[idx] = consolidated[8:-8, :]
+        if (idx+1) % subsample == 0:
+            snapshots[idx//subsample] = consolidated[8:-8, :]
 
     return snapshots, start_idx
             
 if __name__ == "__main__":
     depth = 96
+    subsample = 10
     azure = False
     if azure:
         raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
-    
-    #else:
-        #raw_data = pd.read_csv("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.csv", engine="pyarrow", dtype={"update_type": np.int8, "is_buy": np.int8, "entry_px": np.float32, "entry_sx": np.float32})
-
-    raw_data = np.load("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.npy", mmap_mode='r')
-    #raw_data = np.genfromtxt("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.csv", delimiter=",", dtype=np.float32, skip_header=1)
+    else:
+        raw_data = np.load("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.npy", mmap_mode='r')
     print("loaded")
-    #raw_data = raw_data.iloc
-    #raw_data.dropna(axis=0, inplace=True)
-    #print(raw_data.value_counts("update_type"))
-    #exit()
-    #the start of the first order book snapshot is the first row of the data that doesnt have an update type of snapshot
-    #starting_ob_state = raw_data.loc[raw_data["update_type"] != "snapshot"].index[0]
-    #raw_data['time_exchange_int'] = raw_data['time_exchange'].apply(lambda x: int(x.timestamp()*1000))
-    #raw_data['time_coinapi_int'] = raw_data['time_coinapi'].apply(lambda x: int(x.timestamp()*1000))
-
-    #raw_data.set_index("time_coinapi_int", inplace=True)
-
-    #raw_data.drop(columns=["time_exchange", "time_coinapi"], inplace=True)
-    #raw_data = raw_data[raw_data["entry_sx"] != 0]
-    #raw_data.reset_index(drop=True, inplace=True)
-    #print(raw_data.info())
-
-    #raw_data.rename(columns={"time_exchange_int": "time_exchange", "time_coinapi_int": "time_coinapi"}, inplace=True)
-
-    #raw_data['update_type'] = raw_data['update_type'].apply(map_order_type)
-    #raw_data['is_buy'] = raw_data['is_buy'].apply(lambda x: 1 if x else 0)
-    #raw_data['entry_px'] = (raw_data['entry_px']).astype(np.float32)
-    #raw_data['entry_sx'] = (raw_data['entry_sx']).astype(np.float32)
-
-
-    #raw_data = raw_data.to_numpy(dtype=np.float32)
-    #print(f"0s in raw data: {np.sum(raw_data==0)}")
-    #raw_data = raw_data[:10000, :]
-    #raw_data = raw_data[:, :4]
     print(raw_data.shape)
     print(raw_data[0, :])
     print(raw_data[-1, :])
     #exit()
-    results = np.zeros((len(raw_data), depth, 2), dtype=np.float32, order="C")
-    ob_state, start_idx = optimized_order_book(raw_data, results, depth)
+    results = np.zeros((len(raw_data)//subsample, depth, 2), dtype=np.float32, order="C")
+    ob_state, start_idx = optimized_order_book(raw_data, results, depth, subsample=subsample)
 
     #drop any rows with 0s
     print(f"Ob_state shape: {ob_state.shape}")

@@ -46,7 +46,7 @@ if __name__ == "__main__":
 
     len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", mmap_mode='r').shape[0]
     model = TinyTransformerModel((256, 96, 2), (256, 96, 2), 0.25)
-    state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000074499_epoch_2_mse_tiny_transformer.pth")
+    state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000071894_epoch_8_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
