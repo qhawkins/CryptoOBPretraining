@@ -522,17 +522,17 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.0,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 1e-4,  # Fixed or configurable as needed
+		'lr': 2.5e-4,  # Fixed or configurable as needed
 		'batch_size': 144, # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 256,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 30,  # Define the number of epochs
+		'epochs': 25,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000121314_epoch_2_mse_tiny_transformer.pth",
-		'max_lr': 2.5e-4,
+		'max_lr': 5e-4,
 		"backend": "nccl",
 		"accumulation_steps": 4,
 		"max_grad_norm": 1.5

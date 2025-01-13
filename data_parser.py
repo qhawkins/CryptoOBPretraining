@@ -161,11 +161,14 @@ if __name__ == "__main__":
     if azure:
         raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
     
-    else:
-        raw_data = pd.read_csv("/home/qhawkins/Desktop/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
+    #else:
+        #raw_data = pd.read_csv("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.csv", engine="pyarrow", dtype={"update_type": np.int8, "is_buy": np.int8, "entry_px": np.float32, "entry_sx": np.float32})
 
+    raw_data = np.load("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.npy", mmap_mode='r')
+    #raw_data = np.genfromtxt("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.csv", delimiter=",", dtype=np.float32, skip_header=1)
+    print("loaded")
     #raw_data = raw_data.iloc
-    raw_data.dropna(axis=0, inplace=True)
+    #raw_data.dropna(axis=0, inplace=True)
     #print(raw_data.value_counts("update_type"))
     #exit()
     #the start of the first order book snapshot is the first row of the data that doesnt have an update type of snapshot
@@ -175,25 +178,26 @@ if __name__ == "__main__":
 
     #raw_data.set_index("time_coinapi_int", inplace=True)
 
-    raw_data.drop(columns=["time_exchange", "time_coinapi"], inplace=True)
-    raw_data = raw_data[raw_data["entry_sx"] != 0]
-    raw_data.reset_index(drop=True, inplace=True)
-    print(raw_data.describe())
+    #raw_data.drop(columns=["time_exchange", "time_coinapi"], inplace=True)
+    #raw_data = raw_data[raw_data["entry_sx"] != 0]
+    #raw_data.reset_index(drop=True, inplace=True)
+    #print(raw_data.info())
 
     #raw_data.rename(columns={"time_exchange_int": "time_exchange", "time_coinapi_int": "time_coinapi"}, inplace=True)
 
-    raw_data['update_type'] = raw_data['update_type'].apply(map_order_type)
-    raw_data['is_buy'] = raw_data['is_buy'].apply(lambda x: 1 if x else 0)
-    raw_data['entry_px'] = (raw_data['entry_px']).astype(np.float32)
-    raw_data['entry_sx'] = (raw_data['entry_sx']).astype(np.float32)
+    #raw_data['update_type'] = raw_data['update_type'].apply(map_order_type)
+    #raw_data['is_buy'] = raw_data['is_buy'].apply(lambda x: 1 if x else 0)
+    #raw_data['entry_px'] = (raw_data['entry_px']).astype(np.float32)
+    #raw_data['entry_sx'] = (raw_data['entry_sx']).astype(np.float32)
 
 
-    raw_data = raw_data.to_numpy(dtype=np.float32)
+    #raw_data = raw_data.to_numpy(dtype=np.float32)
     #print(f"0s in raw data: {np.sum(raw_data==0)}")
     #raw_data = raw_data[:10000, :]
     #raw_data = raw_data[:, :4]
     print(raw_data.shape)
     print(raw_data[0, :])
+    print(raw_data[-1, :])
     #exit()
     results = np.zeros((len(raw_data), depth, 2), dtype=np.float32, order="C")
     ob_state, start_idx = optimized_order_book(raw_data, results, depth)
@@ -211,7 +215,7 @@ if __name__ == "__main__":
         np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
     
     else:
-        np.save("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", ob_state)
+        np.save("/media/qhawkins/SSD3/btc_usdt_full_parsed.npy", ob_state)
     
     
     #ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)
