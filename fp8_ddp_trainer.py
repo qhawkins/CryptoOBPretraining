@@ -48,7 +48,7 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 
 # Adapted Trainer class with DDP support
 class Trainer:
-	def __init__(self, config, rank, world_size, train_dataset, test_dataset, dp_group):
+	def __init__(self, config, rank, world_size, train_dataset: tuple, test_dataset: tuple, dp_group):
 		self.config = config
 		self.train_dataset = train_dataset
 		self.test_dataset = test_dataset
@@ -194,41 +194,47 @@ class Trainer:
 		)
 		
 	def split_data(self):
-		total_size = np.load(self.train_dataset, mmap_mode="r").shape[0]
+		#total_size = np.load(self.train_dataset, mmap_mode="r").shape[0]
+		train_sizes = (
+			np.load(self.train_dataset[0], mmap_mode="r").shape[0]*self.config['split_ratios'][0],
+			np.load(self.train_dataset[1], mmap_mode="r").shape[0]*self.config['split_ratios'][0]
+		)
+		test_sizes = (
+			np.load(self.test_dataset[0], mmap_mode="r").shape[0],
+			np.load(self.test_dataset[1], mmap_mode="r").shape[0]
+		)
+		val_sizes = (
+			int((np.load(self.train_dataset[0], mmap_mode="r").shape[0] * self.config['split_ratios'][1]) + train_sizes[0]),
+			int((np.load(self.train_dataset[1], mmap_mode="r").shape[0] * self.config['split_ratios'][1]) + train_sizes[1])
+		)
 
-		train_size = int(self.config['split_ratios'][0] * total_size)
-		val_size = int(self.config['split_ratios'][1] * total_size)
+		#train_size = int(self.config['split_ratios'][0] * total_size)
+		#val_size = int(self.config['split_ratios'][1] * total_size)
 
 		####
 		#train_size = 10000
 		#val_size = 1000
-		####
-
-		test_size = np.load(self.test_dataset, mmap_mode="r").shape[0]
-		
+		####		
 		self.train_ds = PretrainingDataset(
 			self.train_dataset,
-			0, 
-			train_size, 
+			(0, 0), 
+			train_sizes, 
 			self.config['temporal_dim'],
-			self.config['depth_dim'],
 			azure=self.config['azure']
 		)
 		self.val_ds = PretrainingDataset(
 			self.train_dataset,
-			train_size,
-			train_size + val_size,
+			train_sizes,
+			val_sizes,
 			self.config['temporal_dim'],
-			self.config['depth_dim'],
 			azure=self.config['azure']
 
 		)
 		self.test_ds = PretrainingDataset(
 			self.test_dataset,
-			0, 
-			test_size, 
+			(0, 0), 
+			test_sizes, 
 			self.config['temporal_dim'],
-			self.config['depth_dim'],
 			azure=self.config['azure']
 		)
 		
@@ -549,8 +555,16 @@ def main():
 		shared_test_dataset = "/home/azureuser/datadrive/test_indices.npy"
 
 	else:
-		shared_train_dataset = "/home/qhawkins/Desktop/CryptoOBPretraining/train_indices.npy"
-		shared_test_dataset = "/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy"
+		shared_train_dataset = (
+			"/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_train_indices.npy",
+			"/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_train_indices.npy"
+			)
+
+		shared_test_dataset = (
+			"/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_test_indices.npy",
+			"/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_test_indices.npy"
+			)
+		
 	#shared_dataset = torch.from_numpy(shared_dataset)
 	#shared_train_dataset = torch.from_file("/home/azureuser/data/train_dataset.npy", dtype = torch.float32, size=train_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
 	#shared_test_dataset = torch.from_file("/home/azureuser/data/test_dataset.npy", dtype = torch.float32, size=test_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)

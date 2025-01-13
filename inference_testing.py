@@ -44,7 +44,7 @@ if __name__ == "__main__":
     recipe = DelayedScaling(fp8_format=format)
 
 
-    len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", mmap_mode='r').shape[0]
+    #len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", mmap_mode='r').shape[0]
     model = TinyTransformerModel((256, 96, 2), (256, 96, 2), 0.25)
     state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000071894_epoch_8_mse_tiny_transformer.pth")
     state_dict = state_dict['model_state_dict']
@@ -54,8 +54,15 @@ if __name__ == "__main__":
     model.to("cuda")
     model.eval()
     print("Model loaded")
-    dataset = PretrainingDataset("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", 0, 2048*32, 256, 96)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1024, shuffle=False, num_workers=8)
+
+    shared_test_dataset = (
+			"/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_test_indices.npy",
+			"/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_test_indices.npy"
+			)
+		
+
+    dataset = PretrainingDataset(shared_test_dataset, (0, 0), (2048*32, 2048*32), 256, False)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=8)
     loss_fn = torch.nn.MSELoss().cuda()
     #model.compile()
 
