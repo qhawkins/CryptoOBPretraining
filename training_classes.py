@@ -104,11 +104,11 @@ class PretrainingDataset(Dataset):
 		self.start_idx = start_idx
 		self.end_idx = end_idx
 
-		self.cutoff_point = self.end_idx[0] - self.start_idx[0]
+		self.cutoff_point = int(self.end_idx[0] - self.start_idx[0])
 
 		#self.cutoff_point = end_idx[1] - start_idx[1]
 
-		self.length = (end_idx[0] - start_idx[0]) + (end_idx[1] - start_idx[1]) - (2*temporal_offset)
+		self.length = int((end_idx[0] - start_idx[0]) + (end_idx[1] - start_idx[1]) - (2*temporal_offset))
 
 		self.indices = (
 			np.load(data_path[0]),
@@ -136,11 +136,11 @@ class PretrainingDataset(Dataset):
 
 			if idx > self.cutoff_point:
 				idx -= self.cutoff_point
-				idx = self.indices[1][idx]+self.temporal_offset
+				idx = self.indices[1][int(idx)]+self.temporal_offset
 				self.data = np.load("/media/qhawkins/SSD3/btc_usdt_full_parsed.npy", mmap_mode='r')
 
 			else:
-				idx = self.indices[0][idx]+self.temporal_offset
+				idx = self.indices[0][int(idx)]+self.temporal_offset
 				self.data = np.load("/media/qhawkins/SSD3/eth_btc_full_parsed.npy", mmap_mode='r')
 			
 
@@ -157,7 +157,7 @@ class PretrainingDataset(Dataset):
 			#print((f"IDX: {idx}"))
 			#print(f"Temporal Offset: {self.temporal_offset}")
 			#print(type(self.data))
-			data_slice: np.array = self.data[idx-self.temporal_offset:idx]
+			data_slice: np.array = self.data[int(idx-self.temporal_offset):int(idx)]
 			data_slice = torch.from_numpy(data_slice.copy())
 			#data_slice = data_slice.clone()
 			normalized = normalize_data(data_slice)

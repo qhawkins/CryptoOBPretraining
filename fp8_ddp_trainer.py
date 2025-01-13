@@ -196,12 +196,12 @@ class Trainer:
 	def split_data(self):
 		#total_size = np.load(self.train_dataset, mmap_mode="r").shape[0]
 		train_sizes = (
-			np.load(self.train_dataset[0], mmap_mode="r").shape[0]*self.config['split_ratios'][0],
-			np.load(self.train_dataset[1], mmap_mode="r").shape[0]*self.config['split_ratios'][0]
+			int(np.load(self.train_dataset[0], mmap_mode="r").shape[0]*self.config['split_ratios'][0]),
+			int(np.load(self.train_dataset[1], mmap_mode="r").shape[0]*self.config['split_ratios'][0])
 		)
 		test_sizes = (
-			np.load(self.test_dataset[0], mmap_mode="r").shape[0],
-			np.load(self.test_dataset[1], mmap_mode="r").shape[0]
+			int(np.load(self.test_dataset[0], mmap_mode="r").shape[0]),
+			int(np.load(self.test_dataset[1], mmap_mode="r").shape[0])
 		)
 		val_sizes = (
 			int((np.load(self.train_dataset[0], mmap_mode="r").shape[0] * self.config['split_ratios'][1]) + train_sizes[0]),
@@ -528,17 +528,17 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.0,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 2.5e-4,  # Fixed or configurable as needed
+		'lr': 1e-5,  # Fixed or configurable as needed
 		'batch_size': 144, # Fixed value
 		'loss': 'mse',  # Fixed choice
 		'model_size': "tiny_transformer",
 		'temporal_dim': 256,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
-		'epochs': 25,  # Define the number of epochs
+		'epochs': 10,  # Define the number of epochs
 		'load_model': False,
 		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000121314_epoch_2_mse_tiny_transformer.pth",
-		'max_lr': 5e-4,
+		'max_lr': 1e-4,
 		"backend": "nccl",
 		"accumulation_steps": 4,
 		"max_grad_norm": 1.5
