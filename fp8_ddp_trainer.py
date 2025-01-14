@@ -8,17 +8,18 @@ import matplotlib.pyplot as plt
 from collections import deque
 import numpy as np
 import time
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
-#os.environ["TORCH_DISTRIBUTED_DEBUG"]="DETAIL"
 
-
-# Import your existing classes and functions
 from training_classes import PretrainingDataset
-from fp8_models import TinyTransformerModel
+from fp8_models import TinyTransformerModel, MediumTransformerModel
 
 from transformer_engine.common.recipe import Format, DelayedScaling
 import transformer_engine.pytorch as te
+
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
+from tensorboardX import SummaryWriter
+
 
 
 # Define your apply_mask function (unchanged)
@@ -72,8 +73,15 @@ class Trainer:
 		
 		fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
 		self.recipe = DelayedScaling(fp8_format=fp8_format)
+
+		if rank == 0:
+			self.logger = SummaryWriter()
 	
-		
+	def log_gradients_in_model(self, model, logger, step):
+		for tag, value in self.model.named_parameters():
+			if value.grad is not None:
+				self.logger.add_histogram(tag + "/grad", value.grad.cpu(), step)
+
 	def load_model(self, path: str):
 		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), self.config['dropout'])
 		state_dict = torch.load(path)
@@ -333,6 +341,10 @@ class Trainer:
 					torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config["max_grad_norm"])
 					self.optimizer.step()
 					self.scheduler.step()
+
+					if self.rank == 0:
+						self.log_gradients_in_model(self.model, self.logger, i)
+
 					self.optimizer.zero_grad(set_to_none=True)
 
 				if self.config['azure']:
