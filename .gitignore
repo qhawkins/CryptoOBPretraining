@@ -7,3 +7,4 @@ eth_btc_test_indices.npy
 eth_btc_train_indices.npy
 btc_usdt_test_indices.npy
 btc_usdt_train_indices.npy
+/runs

@@ -422,7 +422,7 @@ class MediumTransformerModel(torch.nn.Module):
         embedding = self.embedding_dropout(embedding)
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
-        output = self.encoder1(input)
+        output = self.encoder1(embedding)
         output = self.encoder2(output)
         output = self.encoder3(output)
         output = self.encoder4(output)

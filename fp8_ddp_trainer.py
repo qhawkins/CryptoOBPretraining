@@ -80,7 +80,7 @@ class Trainer:
 	def log_gradients_in_model(self, model, logger, step):
 		for tag, value in self.model.named_parameters():
 			if value.grad is not None:
-				self.logger.add_histogram(tag + "/grad", value.grad.cpu(), step)
+				self.logger.add_histogram(tag + "/grad", value.grad.to("cpu", non_blocking=True), step)
 
 	def load_model(self, path: str):
 		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), self.config['dropout'])
@@ -99,7 +99,8 @@ class Trainer:
 		dropout = self.config['dropout']
 		
 		model_classes = {
-			'tiny_transformer': TinyTransformerModel
+			'tiny_transformer': TinyTransformerModel,
+			'medium_transformer': MediumTransformerModel
 		}
 		
 		if model_size not in model_classes:
@@ -342,7 +343,7 @@ class Trainer:
 					self.optimizer.step()
 					self.scheduler.step()
 
-					if self.rank == 0:
+					if self.rank == 0 and (i+1) % 10000 == 0:
 						self.log_gradients_in_model(self.model, self.logger, i)
 
 					self.optimizer.zero_grad(set_to_none=True)
@@ -541,9 +542,10 @@ def main():
 		'dropout': 0.0,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
 		'lr': 1e-5,  # Fixed or configurable as needed
-		'batch_size': 144, # Fixed value
+		'batch_size': 64, # Fixed value
 		'loss': 'mse',  # Fixed choice
-		'model_size': "tiny_transformer",
+		#'model_size': "tiny_transformer",
+		'model_size': "medium_transformer",
 		'temporal_dim': 256,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
@@ -552,7 +554,7 @@ def main():
 		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000121314_epoch_2_mse_tiny_transformer.pth",
 		'max_lr': 1e-4,
 		"backend": "nccl",
-		"accumulation_steps": 4,
+		"accumulation_steps": 8,
 		"max_grad_norm": 1.5
 	}
 	
