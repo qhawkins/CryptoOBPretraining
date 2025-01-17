@@ -6,7 +6,7 @@ import os
 # Configuration
 azure = False
 #most_recent = 5000  # Adjust this value based on your needs
-most_recent = 200000
+most_recent = 400000
 # File paths
 if azure:
     loss_path = "/home/qhawkins/Downloads/pretrained_ddp_epoch_train_losses.txt"
@@ -14,7 +14,7 @@ if azure:
     # lr_path = "/home/qhawkins/Downloads/pretrained_ddp_lr.txt"
 else:
     loss_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_epoch_train_losses.txt"
-    #loss_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_epoch_val_losses.txt"
+    loss_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_epoch_val_losses.txt"
     # lr_path = "/media/qhawkins/SSD3/single_models/pretrained_ddp_lr.txt"
 
 def read_train_losses():

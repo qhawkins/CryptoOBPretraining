@@ -83,7 +83,7 @@ class Trainer:
 				self.logger.add_histogram(tag + "/grad", value.grad.cpu(), step)
 
 	def load_model(self, path: str):
-		self.model = TinyTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), self.config['dropout'])
+		self.model = MediumTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), self.config['dropout'])
 		state_dict = torch.load(path)
 		state_dict = state_dict['model_state_dict']
 		state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -255,12 +255,13 @@ class Trainer:
 		self.ratios = self.config['split_ratios']
 		self.lr_decay_factor = self.config['lr_decay_factor']
 		self.lr_decay_patience = self.config['lr_decay_patience']
-		self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-			self.optimizer,
-			max_lr=self.config["max_lr"],
-			epochs=self.config["epochs"],
-			steps_per_epoch=len(self.train_dataloader)
-		)
+		if self.config['use_scheduler']:
+			self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+				self.optimizer,
+				max_lr=self.config["max_lr"],
+				epochs=self.config["epochs"],
+				steps_per_epoch=len(self.train_dataloader)
+			)
 		self.early_stopping_patience = self.config['early_stopping_patience']
 		self.saved_models = deque(maxlen=self.early_stopping_patience + 1)
 		self.best_val_loss = float('inf')
@@ -341,7 +342,8 @@ class Trainer:
 					loss.backward()
 					torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config["max_grad_norm"])
 					self.optimizer.step()
-					self.scheduler.step()
+					if self.config['use_scheduler']:
+						self.scheduler.step()
 
 					if self.rank == 0 and (i+1) % 1000 == 0:
 						self.log_gradients_in_model(self.model, self.logger, i)
@@ -398,15 +400,17 @@ class Trainer:
 						f.write(f"{avg_train_loss}\n")
 					with open(f"/home/azureuser/single_models/{self.model_name}_val_losses.txt", "a+") as f:
 						f.write(f"{avg_val_loss}\n")
-					with open(f"/home/azureuser/single_models/{self.model_name}_lr.txt", "a+") as f:
-						f.write(f"{self.scheduler.get_last_lr()[0]}\n")
+					if self.config['use_scheduler']:
+						with open(f"/home/azureuser/single_models/{self.model_name}_lr.txt", "a+") as f:
+							f.write(f"{self.scheduler.get_last_lr()[0]}\n")
 				else:
 					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_train_losses.txt", "a+") as f:
 						f.write(f"{avg_train_loss}\n")
 					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_val_losses.txt", "a+") as f:
 						f.write(f"{avg_val_loss}\n")
-					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_lr.txt", "a+") as f:
-						f.write(f"{self.scheduler.get_last_lr()[0]}\n")
+					if self.config['use_scheduler']:
+						with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_lr.txt", "a+") as f:
+							f.write(f"{self.scheduler.get_last_lr()[0]}\n")
 
 				epoch_completion_time = epoch_end_time-epoch_start_time
 				#given the current system time and the time it took to complete the previous epoch, I want to estimate the system time at the completion of the next epoch
@@ -541,7 +545,7 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.0,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 1e-4,  # Fixed or configurable as needed
+		'lr': 3.5e-5,  # Fixed or configurable as needed
 		'batch_size': 64, # Fixed value
 		'loss': 'mse',  # Fixed choice
 		#'model_size': "tiny_transformer",
@@ -550,12 +554,13 @@ def main():
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
 		'epochs': 10,  # Define the number of epochs
-		'load_model': False,
-		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000121314_epoch_2_mse_tiny_transformer.pth",
+		'load_model': True,
+		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
 		'max_lr': 2.5e-4,
 		"backend": "nccl",
 		"accumulation_steps": 8,
-		"max_grad_norm": 1.5
+		"max_grad_norm": 1.5,
+		"use_scheduler": False
 	}
 	
 	#torch.multiprocessing.set_sharing_strategy('file_system')

@@ -1,4 +1,4 @@
-from fp8_models import TinyTransformerModel
+from fp8_models import TinyTransformerModel, MediumTransformerModel
 from training_classes import normalize_data, PretrainingDataset
 import torch
 import numpy as np
@@ -30,7 +30,7 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
     return masked_inputs.cuda(), mask.cuda()
 
 def load_model(path: str):
-    model = TinyTransformerModel((256, 96, 2), (256, 96, 2), 0.0)
+    model = MediumTransformerModel((256, 96, 2), (256, 96, 2), 0.0)
     state_dict = torch.load(path)
     state_dict = state_dict['model_state_dict']
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
@@ -45,8 +45,8 @@ if __name__ == "__main__":
 
 
     #len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", mmap_mode='r').shape[0]
-    model = TinyTransformerModel((256, 96, 2), (256, 96, 2), 0.25)
-    state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000216973_epoch_3_mse_tiny_transformer.pth")
+    model = MediumTransformerModel((256, 96, 2), (256, 96, 2), 0.25)
+    state_dict = torch.load("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth")
     state_dict = state_dict['model_state_dict']
     print(state_dict.keys())
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
