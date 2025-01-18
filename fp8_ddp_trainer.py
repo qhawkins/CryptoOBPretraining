@@ -10,7 +10,7 @@ import numpy as np
 import time
 
 from training_classes import PretrainingDataset
-from fp8_models import TinyTransformerModel, MediumTransformerModel
+from fp8_models import TinyTransformerModel, MediumTransformerModel, DeepNarrowTransformerModel
 
 from transformer_engine.common.recipe import Format, DelayedScaling
 import transformer_engine.pytorch as te
@@ -100,7 +100,8 @@ class Trainer:
 		
 		model_classes = {
 			'tiny_transformer': TinyTransformerModel,
-			'medium_transformer': MediumTransformerModel
+			'medium_transformer': MediumTransformerModel,
+			'deep_narrow_transformer': DeepNarrowTransformerModel
 		}
 		
 		if model_size not in model_classes:
@@ -416,7 +417,11 @@ class Trainer:
 				#given the current system time and the time it took to complete the previous epoch, I want to estimate the system time at the completion of the next epoch
 				next_epoch_estimated_time = time.ctime(time.time() + epoch_completion_time)
 
-				print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
+				if self.config['use_scheduler']:
+					print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
+				else:		
+					print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.config["lr"]}')
+				
 				self.save_model(epoch, avg_val_loss)
 				if avg_val_loss < best_val_loss:
 					best_val_loss = avg_val_loss
@@ -545,22 +550,23 @@ def main():
 		'best_model_path': "best_model.pth",
 		'dropout': 0.0,  # Fixed value instead of tune.choice
 		'optimizer': 'adamw',  # Fixed choice
-		'lr': 3.5e-5,  # Fixed or configurable as needed
-		'batch_size': 64, # Fixed value
+		'lr': 1e-4,  # Fixed or configurable as needed
+		'batch_size': 128, # Fixed value
 		'loss': 'mse',  # Fixed choice
 		#'model_size': "tiny_transformer",
-		'model_size': "medium_transformer",
+		#'model_size': "medium_transformer",
+		"model_size": "deep_narrow_transformer",
 		'temporal_dim': 256,
 		'mask_perc': 0.25,  # Fixed choice
 		'depth_dim': 96,
 		'epochs': 10,  # Define the number of epochs
-		'load_model': True,
+		'load_model': False,
 		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
 		'max_lr': 2.5e-4,
 		"backend": "nccl",
-		"accumulation_steps": 8,
+		"accumulation_steps": 4,
 		"max_grad_norm": 1.5,
-		"use_scheduler": False
+		"use_scheduler": True
 	}
 	
 	#torch.multiprocessing.set_sharing_strategy('file_system')
