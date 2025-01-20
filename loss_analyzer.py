@@ -6,7 +6,7 @@ import os
 # Configuration
 azure = False
 #most_recent = 5000  # Adjust this value based on your needs
-most_recent = 5000
+most_recent = 500000
 # File paths
 if azure:
     loss_path = "/home/qhawkins/Downloads/pretrained_ddp_epoch_train_losses.txt"

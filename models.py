@@ -1,5 +1,4 @@
 import torch
-from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 
 class SmallFCModel(torch.nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
