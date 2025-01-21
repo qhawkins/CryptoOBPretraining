@@ -10,3 +10,4 @@ btc_usdt_train_indices.npy
 /runs
 ppo_model.onnx
 report_dynamo_export.sarif
+ppo_model.pt

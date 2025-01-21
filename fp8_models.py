@@ -377,7 +377,7 @@ class MediumTransformerModel(torch.nn.Module):
                                                             fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
                                                             parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
 
-
+    
     def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
         Applies Rotary Positional Embeddings to the input tensor.
@@ -691,7 +691,7 @@ class DeepNarrowTransformerModel(torch.nn.Module):
                                                     num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
                                                     fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
                                                     parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
-
+    
     def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
         Applies Rotary Positional Embeddings to the input tensor.
@@ -718,7 +718,8 @@ class DeepNarrowTransformerModel(torch.nn.Module):
         x_rotated = torch.stack((x_rotated_even, x_rotated_odd), dim=-1).reshape_as(x)  # (B, T, D, F)
 
         return x_rotated
-
+    
+    
     def forward(self, input):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
@@ -781,6 +782,497 @@ class DeepNarrowTransformerModel(torch.nn.Module):
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x
     
+class DeepNarrowTransformerModelPT(torch.nn.Module):
+    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
+        super().__init__()
+        self.depth_dim = input_shape[1]
+        self.features_dim = input_shape[2]
+        self.temporal_dim = input_shape[0]
+        self.inputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.outputs_shape = self.depth_dim * self.features_dim * self.temporal_dim
+        self.base = 10000.0
+        half_dim = (self.features_dim * self.depth_dim) // 2
+
+        # Create position indices [0, 1, ..., T-1]
+        position = torch.arange(self.temporal_dim, dtype=torch.float32).unsqueeze(1)  # (T, 1)
+
+        # Compute the inverse frequencies
+        div_term = torch.exp(
+            torch.arange(0, half_dim, dtype=torch.float32) * (-torch.log(torch.tensor(self.base)) / half_dim)
+        )  # (half_dim,)
+
+        # Compute the angles (T, half_dim)
+        angles = position * div_term  # (T, half_dim)
+
+        # Compute sin and cos
+        sin = torch.sin(angles).requires_grad_(False)  # (T, half_dim)
+        cos = torch.cos(angles).requires_grad_(False)  # (T, half_dim)
+        sin = sin.unsqueeze(0).unsqueeze(-1)  # (1, T, 1, F//2)
+        cos = cos.unsqueeze(0).unsqueeze(-1)
+
+        # Register as buffers to ensure they are moved with the model and not trained
+        self.register_buffer('sin', sin)  # (T, half_dim)
+        self.register_buffer('cos', cos)  # (T, half_dim)
+
+        self.embedding_layer = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
+        self.embedding_relu = torch.nn.ReLU()
+        self.embedding_dropout = torch.nn.Dropout(dropout)
+        
+        self.output_fc = torch.nn.Linear(self.features_dim*self.depth_dim, self.features_dim*self.depth_dim)
+        self.output_relu = torch.nn.ReLU()
+        self.output_dropout = torch.nn.Dropout(dropout)
+
+        self.encoder1 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        
+        self.encoder2 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder3 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder4 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder5 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder6 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder7 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder8 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder9 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder10 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder11 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder12 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder13 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder14 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder15 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder16 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        
+        self.encoder17 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder18 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder19 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder20 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder21 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder22 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder23 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder24 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        self.encoder25 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder26 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder27 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder28 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder29 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder30 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder31 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder32 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder33 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder34 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder35 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        
+        self.encoder36 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder37 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder38 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder39 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+
+        self.encoder40 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.features_dim*self.depth_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+    
+    def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
+        """
+        Applies Rotary Positional Embeddings to the input tensor.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, T, F).
+            sin (torch.Tensor): Sine embeddings of shape (T, F/2).
+            cos (torch.Tensor): Cosine embeddings of shape (T, F/2).
+
+        Returns:
+            torch.Tensor: Tensor with RoPE applied, shape (B, T, F).
+        """
+        # Ensure the feature dimension is even
+
+        # Split the features into even and odd
+        x_even = x[..., 0::2]  # (B, T, F/2)
+        x_odd = x[..., 1::2]   # (B, T, F/2)
+
+        # Apply rotation
+        x_rotated_even = x_even * cos - x_odd * sin
+        x_rotated_odd = x_even * sin + x_odd * cos
+
+        # Interleave the rotated even and odd features
+        x_rotated = torch.stack((x_rotated_even, x_rotated_odd), dim=-1).reshape_as(x)  # (B, T, D, F)
+
+        return x_rotated
+    
+    
+    def forward(self, input):
+        #x = x.view(-1, self.inputs_shape)
+        #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
+        input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, D, F)
+
+        input = input.view(-1, self.temporal_dim, self.features_dim * self.depth_dim)
+        #input = input + self.pe[:input.size(1)]
+        
+        embedding = self.embedding_layer(input)
+        embedding = self.embedding_relu(embedding)
+        embedding = self.embedding_dropout(embedding)
+        #x = self.positional_encoder(x)
+        #print(f"Shape after positional encoding: {x.shape}")
+        output = self.encoder1(embedding)
+        output = self.encoder2(output)
+        output = self.encoder3(output)
+        output = self.encoder4(output)
+        output = self.encoder5(output)
+        output = self.encoder6(output)
+        output = self.encoder7(output)
+        output = self.encoder8(output)
+        output = self.encoder9(output)
+        output = self.encoder10(output)
+        output = self.encoder11(output)
+        output = self.encoder12(output)
+        output = self.encoder13(output)
+        output = self.encoder14(output)
+        output = self.encoder15(output)
+        output = self.encoder16(output)
+        output = self.encoder17(output)
+        output = self.encoder18(output)
+        output = self.encoder19(output)
+        output = self.encoder20(output)
+        output = self.encoder21(output)
+        output = self.encoder22(output)
+        output = self.encoder23(output)
+        output = self.encoder24(output)
+        output = self.encoder25(output)
+        output = self.encoder26(output)
+        output = self.encoder27(output)
+        output = self.encoder28(output)
+        output = self.encoder29(output)
+        output = self.encoder30(output)
+        output = self.encoder31(output)
+        output = self.encoder32(output)
+        output = self.encoder33(output)
+        output = self.encoder34(output)
+        output = self.encoder35(output)
+        output = self.encoder36(output)
+        output = self.encoder37(output)
+        output = self.encoder38(output)
+        output = self.encoder39(output)
+        output = self.encoder40(output)
+
+        output = self.output_fc(output)
+        output = self.output_relu(output)
+        output = self.output_dropout(output)
+        x = output.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+
+        #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        return x
+
 class StateEncoder(torch.nn.Module):
     def __init__(self, state_features_dim: int, temporal_dim: int, output_shape: tuple, dropout: float):
         super().__init__()
@@ -812,35 +1304,49 @@ class StateEncoder(torch.nn.Module):
         self.register_buffer('sin', sin)  # (T, half_dim)
         self.register_buffer('cos', cos)  # (T, half_dim)
 
-        self.embedding_layer = te.Linear(self.state_features_dim, self.state_features_dim)
+        self.embedding_layer = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
         self.embedding_relu = torch.nn.ReLU()
         self.embedding_dropout = torch.nn.Dropout(dropout)
 
-        self.state_encoder_1 = te.TransformerLayer(hidden_size=self.state_features_dim, ffn_hidden_size=1536,
-                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
-                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
-                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
+        self.state_encoder_1 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.state_features_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
         
-        self.state_encoder_2 = te.TransformerLayer(hidden_size=self.state_features_dim, ffn_hidden_size=1536,
-                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
-                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
-                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
+        self.state_encoder_2 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.state_features_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
 
-        self.state_encoder_3 = te.TransformerLayer(hidden_size=self.state_features_dim, ffn_hidden_size=1536,
-                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
-                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
-                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
-
-        self.state_encoder_4 = te.TransformerLayer(hidden_size=self.state_features_dim, ffn_hidden_size=1536,
-                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
-                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
-                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
-
+        self.state_encoder_3 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.state_features_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+        self.state_encoder_4 = torch.nn.TransformerEncoderLayer(
+            d_model=(self.state_features_dim),
+            dim_feedforward=1536,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
         
-        self.output_fc = te.Linear(self.state_features_dim, self.state_features_dim)
+        self.output_fc = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
         self.output_relu = torch.nn.ReLU()
         self.output_dropout = torch.nn.Dropout(dropout)
-
+    
     def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
         Applies Rotary Positional Embeddings to the input tensor.
@@ -867,7 +1373,8 @@ class StateEncoder(torch.nn.Module):
         x_rotated = torch.stack((x_rotated_even, x_rotated_odd), dim=-1).reshape_as(x)  # (B, T, F)
 
         return x_rotated
-
+    
+    
     def forward(self, input):
         input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, F)
 
@@ -887,34 +1394,40 @@ class StateEncoder(torch.nn.Module):
         return output
 
 class PPOModel(torch.nn.Module):
-
-    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float, state_features_dim: int, ob_encoder: DeepNarrowTransformerModel):
+    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float, state_features_dim: int, ob_encoder: DeepNarrowTransformerModelPT):
         super().__init__()
         self.temporal_dim = input_shape[0]
-        self.ob_encoder: DeepNarrowTransformerModel = ob_encoder
+        self.ob_encoder: DeepNarrowTransformerModelPT = ob_encoder
         self.state_encoder = StateEncoder(state_features_dim=state_features_dim, temporal_dim=input_shape[0], output_shape=output_shape, dropout=dropout)
 
-        self.policy_encoder = te.TransformerLayer(hidden_size=(state_features_dim + (input_shape[1]*input_shape[2])), ffn_hidden_size=1024,
-                                                    num_attention_heads=8, layer_type='encoder', hidden_dropout=dropout,
-                                                    fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
-                                                    parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
-
-        self.policy_fc1 = te.Linear(state_features_dim + (input_shape[1]*input_shape[2]), 1024)
+        self.policy_encoder = torch.nn.TransformerEncoderLayer(
+            d_model=(state_features_dim + (input_shape[1]*input_shape[2])),
+            dim_feedforward=1024,
+            nhead=8,
+            dropout=dropout,
+            activation="gelu",
+            batch_first=True,
+        )
+            
+        self.policy_fc1 = torch.nn.Linear(state_features_dim + (input_shape[1]*input_shape[2]), 1024)
         self.policy_fc1_activation = torch.nn.ReLU()
         self.policy_fc1_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc2 = te.Linear(1024, 2048)
+        self.policy_fc2 = torch.nn.Linear(1024, 2048)
         self.policy_fc2_activation = torch.nn.ReLU()
         self.policy_fc2_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc3 = te.Linear(2048, 1024)
+        self.policy_fc3 = torch.nn.Linear(2048, 1024)
         self.policy_fc3_activation = torch.nn.ReLU()
         self.policy_fc3_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc4 = te.Linear(1024, 512)
+        self.policy_fc4 = torch.nn.Linear(1024, 512)
         self.policy_fc4_activation = torch.nn.ReLU()
         self.policy_fc4_dropout = torch.nn.Dropout(dropout)
 
+        self.policy_output = torch.nn.Linear(self.temporal_dim*512, 1)
+
+    
     def forward(self, ob_input, state_input):
         ob_output = self.ob_encoder(ob_input)
         ob_output = ob_output.view(-1, self.temporal_dim, (self.ob_encoder.depth_dim * self.ob_encoder.features_dim))
@@ -942,7 +1455,7 @@ class PPOModel(torch.nn.Module):
 
         x = x.flatten(start_dim=1)
 
-        x = torch.nn.functional.softmax(x, dim=-1)
+        x = self.policy_output(x)
+        x = torch.nn.functional.tanh(x)
 
         return x
-
