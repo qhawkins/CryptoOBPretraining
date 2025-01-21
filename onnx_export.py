@@ -1,7 +1,9 @@
 import torch
 from fp8_models import DeepNarrowTransformerModel, PPOModel
 import transformer_engine.pytorch as te
-
+from transformer_engine.common.recipe import Format, DelayedScaling
+fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
+recipe = DelayedScaling(fp8_format=fp8_format)
 def load_model(path: str):
     ob_model = DeepNarrowTransformerModel((256, 96, 2), (256, 96, 2), 0.25)
     state_dict = torch.load(path)  # Addressing FutureWarning
@@ -22,16 +24,10 @@ if __name__ == "__main__":
     # Optionally, avoid using graphed callables if they introduce scripting issues
     # model = te.make_graphed_callables(model, (ob_example, state_example))
     print("Model graphed")
-    model = model.train(True)
+    #model = model.train(True)
     print("Model set to training mode")
-
-    # Use tracing instead of scripting
-    traced_script_module = torch.jit.trace(model, (ob_example, state_example))
-
-    output: torch.Tensor = traced_script_module(ob_example, state_example)
-    print(output.shape)
-
-    # Save the traced model
-    traced_script_module.save("traced_transformer_model.pt")
-    print("Model saved")
-
+    with torch.inference_mode(), te.fp8_autocast(
+            enabled=True, fp8_recipe=recipe
+        ):
+        with te.onnx_export(enabled=True):
+            model = torch.onnx.export(model, (ob_example, state_example, ), "ppo_model.onnx", export_params=True, training=torch.onnx.TrainingMode.TRAINING, do_constant_folding=False)

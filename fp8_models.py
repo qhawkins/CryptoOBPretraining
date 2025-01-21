@@ -147,7 +147,7 @@ class TinyTransformerModel(torch.nn.Module):
                                                     fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
                                                     parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")"""
 
-    def apply_rotary_pos_emb(self, x: torch.Tensor, sin: torch.Tensor, cos: torch.Tensor) -> torch.Tensor:
+    def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
         Applies Rotary Positional Embeddings to the input tensor.
 
@@ -160,7 +160,6 @@ class TinyTransformerModel(torch.nn.Module):
             torch.Tensor: Tensor with RoPE applied, shape (B, T, F).
         """
         # Ensure the feature dimension is even
-        assert x.size(-1) % 2 == 0, "Feature dimension must be even for RoPE."
 
         # Split the features into even and odd
         x_even = x[..., 0::2]  # (B, T, F/2)
@@ -176,7 +175,7 @@ class TinyTransformerModel(torch.nn.Module):
         return x_rotated
 
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
         input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, D, F)
@@ -217,7 +216,6 @@ class TinyTransformerModel(torch.nn.Module):
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return x
     
-
 class MediumTransformerModel(torch.nn.Module):
     def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float):
         super().__init__()
@@ -380,7 +378,7 @@ class MediumTransformerModel(torch.nn.Module):
                                                             parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
 
 
-    def apply_rotary_pos_emb(self, x: torch.Tensor, sin: torch.Tensor, cos: torch.Tensor) -> torch.Tensor:
+    def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
         Applies Rotary Positional Embeddings to the input tensor.
 
@@ -393,7 +391,6 @@ class MediumTransformerModel(torch.nn.Module):
             torch.Tensor: Tensor with RoPE applied, shape (B, T, F).
         """
         # Ensure the feature dimension is even
-        assert x.size(-1) % 2 == 0, "Feature dimension must be even for RoPE."
 
         # Split the features into even and odd
         x_even = x[..., 0::2]  # (B, T, F/2)
@@ -409,7 +406,7 @@ class MediumTransformerModel(torch.nn.Module):
         return x_rotated
 
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
         input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, D, F)
@@ -695,7 +692,7 @@ class DeepNarrowTransformerModel(torch.nn.Module):
                                                     fuse_qkv_params=True, set_parallel_mode=True,  attn_input_format="bshd", 
                                                     parallel_attention_mlp=True, attention_dropout=dropout, self_attn_mask_type="no_mask")
 
-    def apply_rotary_pos_emb(self, x: torch.Tensor, sin: torch.Tensor, cos: torch.Tensor) -> torch.Tensor:
+    def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
         Applies Rotary Positional Embeddings to the input tensor.
 
@@ -708,7 +705,6 @@ class DeepNarrowTransformerModel(torch.nn.Module):
             torch.Tensor: Tensor with RoPE applied, shape (B, T, F).
         """
         # Ensure the feature dimension is even
-        assert x.size(-1) % 2 == 0, "Feature dimension must be even for RoPE."
 
         # Split the features into even and odd
         x_even = x[..., 0::2]  # (B, T, F/2)
@@ -723,7 +719,7 @@ class DeepNarrowTransformerModel(torch.nn.Module):
 
         return x_rotated
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)
         input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, D, F)
@@ -809,8 +805,8 @@ class StateEncoder(torch.nn.Module):
         # Compute sin and cos
         sin = torch.sin(angles).requires_grad_(False)  # (T, half_dim)
         cos = torch.cos(angles).requires_grad_(False)  # (T, half_dim)
-        sin = sin.unsqueeze(0).unsqueeze(-1)  # (1, T, 1, F//2)
-        cos = cos.unsqueeze(0).unsqueeze(-1)
+        sin = sin.unsqueeze(0)#.unsqueeze(-1)  # (1, T, 1, F//2)
+        cos = cos.unsqueeze(0)#.unsqueeze(-1)
 
         # Register as buffers to ensure they are moved with the model and not trained
         self.register_buffer('sin', sin)  # (T, half_dim)
@@ -845,7 +841,7 @@ class StateEncoder(torch.nn.Module):
         self.output_relu = torch.nn.ReLU()
         self.output_dropout = torch.nn.Dropout(dropout)
 
-    def apply_rotary_pos_emb(self, x: torch.Tensor, sin: torch.Tensor, cos: torch.Tensor) -> torch.Tensor:
+    def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
         Applies Rotary Positional Embeddings to the input tensor.
 
@@ -858,7 +854,6 @@ class StateEncoder(torch.nn.Module):
             torch.Tensor: Tensor with RoPE applied, shape (B, T, F).
         """
         # Ensure the feature dimension is even
-        assert x.size(-1) % 2 == 0, "Feature dimension must be even for RoPE."
 
         # Split the features into even and odd
         x_even = x[..., 0::2]  # (B, T, F/2)
@@ -873,7 +868,7 @@ class StateEncoder(torch.nn.Module):
 
         return x_rotated
 
-    def forward(self, input: torch.Tensor):
+    def forward(self, input):
         input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, F)
 
         embedding = self.embedding_layer(input)
@@ -891,13 +886,12 @@ class StateEncoder(torch.nn.Module):
 
         return output
 
-
 class PPOModel(torch.nn.Module):
 
-    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float, state_features_dim: int):
+    def __init__(self, input_shape: tuple, output_shape: tuple, dropout: float, state_features_dim: int, ob_encoder: DeepNarrowTransformerModel):
         super().__init__()
         self.temporal_dim = input_shape[0]
-        self.ob_encoder = DeepNarrowTransformerModel(input_shape=input_shape, output_shape=output_shape, dropout=dropout)
+        self.ob_encoder: DeepNarrowTransformerModel = ob_encoder
         self.state_encoder = StateEncoder(state_features_dim=state_features_dim, temporal_dim=input_shape[0], output_shape=output_shape, dropout=dropout)
 
         self.policy_encoder = te.TransformerLayer(hidden_size=(state_features_dim + (input_shape[1]*input_shape[2])), ffn_hidden_size=1024,
@@ -921,12 +915,12 @@ class PPOModel(torch.nn.Module):
         self.policy_fc4_activation = torch.nn.ReLU()
         self.policy_fc4_dropout = torch.nn.Dropout(dropout)
 
-    def forward(self, ob_input: torch.Tensor, state_input: torch.Tensor):
-        ob_output: torch.Tensor = self.ob_encoder(ob_input)
+    def forward(self, ob_input, state_input):
+        ob_output = self.ob_encoder(ob_input)
         ob_output = ob_output.view(-1, self.temporal_dim, (self.ob_encoder.depth_dim * self.ob_encoder.features_dim))
         state_output = self.state_encoder(state_input)
 
-        x = torch.cat((ob_output, state_output), dim=1)
+        x = torch.cat((ob_output, state_output), dim=-1)
 
         x = self.policy_encoder(x)
 
@@ -944,7 +938,7 @@ class PPOModel(torch.nn.Module):
 
         x = self.policy_fc4(x)
         x = self.policy_fc4_activation(x)
-        x: torch.Tensor = self.policy_fc4_dropout(x)
+        x = self.policy_fc4_dropout(x)
 
         x = x.flatten(start_dim=1)
 
