@@ -1,6 +1,30 @@
+from fp8_models import DeepNarrowTransformerModelPT
+from training_classes import PretrainingDataset
 import torch
-from fp8_models import DeepNarrowTransformerModelPT, PPOModel
-import transformer_engine.pytorch as te
+
+def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, device='cuda'):
+    """
+    Applies masking to the input tensor.
+
+    Args:
+        inputs (torch.Tensor): Input tensor of shape (batch_size, seq_length, features).
+        mask_percentage (float): Fraction of entries to mask.
+        mask_value (float): Value to replace masked entries with.
+        device (str): Device to perform masking on.
+
+    Returns:
+        masked_inputs (torch.Tensor): Tensor with masked entries.
+        labels (torch.Tensor): Tensor with original values for masked entries and -100 elsewhere.
+        mask (torch.Tensor): Boolean mask indicating which entries were masked.
+    """
+    # Generate a mask for 15% of the entries
+    mask = torch.rand(inputs.shape, device=device) < mask_percentage
+
+    # Replace masked entries in inputs with mask_value
+    masked_inputs = inputs.clone()
+    masked_inputs[mask] = mask_value
+
+    return masked_inputs.cuda(), mask.cuda()
 
 def parse_state_dict(state_dict: dict) -> dict:
     """
@@ -110,32 +134,65 @@ def load_model(path: str):
     state_dict = torch.load(path)  # Addressing FutureWarning
     state_dict = state_dict['model_state_dict']
     state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    means1 = []
+    means2 = []
+    for key, v in state_dict.items():
+        try:
+            means1.append(torch.mean(v))
+            print(torch.mean(v))
+        except:
+            continue
+    #print(f"OB model keys: {ob_model.state_dict().keys()}")
+    #print(f"State dict keys (transformerengine model): {state_dict.keys()}")
+    #exit()
+    print(100*"=")
     state_dict = parse_state_dict(state_dict)
+    for _, v in state_dict.items():
+        means2.append(torch.mean(v))
+        print(torch.mean(v))
+    for i in range(len(means1)):
+        print(f"Mean difference: {means1[i] - means2[i]}")
     ob_model.load_state_dict(state_dict)
-    ppo_model = PPOModel((256, 96, 2), (256, 96, 2), 0.25, 16, ob_model)
-    # ppo_model.eval()  # Typically used for evaluation mode
-    return ppo_model
+    ob_model.to("cuda")
+    ob_model = ob_model.eval()
+    return ob_model
 
 if __name__ == "__main__":
-    model: PPOModel = load_model("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000116003_epoch_5_mse_deep_narrow_transformer.pth")
-    ob_example = torch.rand(1, 256, 96, 2).to("cuda")
-    state_example = torch.rand(1, 256, 16).to("cuda")
+    #len_dataset = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/test_indices.npy", mmap_mode='r').shape[0]
+    model = load_model("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000116003_epoch_5_mse_deep_narrow_transformer.pth")
+    print("Model loaded")
 
-    model = model.to("cuda")
+    shared_test_dataset = (
+			"/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_test_indices.npy",
+			"/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_test_indices.npy"
+			)
+		
 
-    # Optionally, avoid using graphed callables if they introduce scripting issues
-    # model = te.make_graphed_callables(model, (ob_example, state_example))
-    print("Model graphed")
-    model = model.train(True)
-    print("Model set to training mode")
+    dataset = PretrainingDataset(shared_test_dataset, (0, 0), (2048*32, 2048*32), 256, False)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1024, shuffle=True, num_workers=8)
+    loss_fn = torch.nn.MSELoss().cuda()
+    #model.compile()
 
-    # Use tracing instead of scripting
-    traced_script_module = torch.jit.trace(model, (ob_example, state_example))
 
-    output: torch.Tensor = traced_script_module(ob_example, state_example)
-    print(output.shape)
+    loss_values = []
+    for idx, data in enumerate(dataloader):
+        masked_inputs, mask = apply_mask(
+            data,
+            mask_percentage=.25,
+            mask_value=0,  # You can choose a different mask value if needed
+            device='cuda'
+        )
+        with torch.no_grad():
+            with torch.amp.autocast(device_type='cuda'):
+                data = data.cuda()
+                outputs = model(masked_inputs)  # Shape: (batch_size, seq_length -1, features)
+                loss_val = loss_fn(outputs[mask], data[mask])
+                print(f"Data masked: {data[mask]}, outputs masked: {outputs[mask]}")
+                #exit()
+            mean_loss = torch.mean(loss_val).cpu()
+            print(f"Mean loss: {mean_loss} for epoch {idx}")
+            loss_values.append(mean_loss)
+            
+                #exit()
 
-    # Save the traced model
-    torch.jit.save(traced_script_module, "ppo_model.pt")
-    print("Model saved")
-
+    print(f"Mean loss: {torch.mean(torch.tensor(loss_values))}")
