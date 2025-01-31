@@ -67,7 +67,7 @@ def order_book_update(levels: np.array, update_type: float, price_idx: float, pr
 @numba.njit(cache=True)
 def add_slice(levels: np.array, price: float, size: float):
     idx = 0
-    storage = np.zeros((len(levels), 2), dtype=np.float32)
+    storage = np.zeros((len(levels), 2), dtype=np.float64)
     for i in range(len(levels)-1):
         if price > levels[i, 0] and price < levels[i+1, 0]:
             idx = i
@@ -114,21 +114,22 @@ def switch_padding(levels: np.array):
 def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128, subsample: int = 10):
     flag = False
     max_size = max_size + 16
-    buys = np.zeros((max_size//2, 2), dtype=np.float32)
-    sells = np.zeros((max_size//2, 2), dtype=np.float32)
-    consolidated = np.zeros((max_size, 2), dtype=np.float32)
+    buys = np.zeros((max_size//2, 2), dtype=np.float64)
+    sells = np.zeros((max_size//2, 2), dtype=np.float64)
+    consolidated = np.zeros((max_size, 2), dtype=np.float64)
     
     for idx, row in enumerate(arr):
         if idx % 10000000 == 0:
             print(f"Processing row {idx//10}, number of 0s in snapshots: {np.sum(snapshots[(idx//10)-1000000:(idx//10)] == 0)}")        
-        price = row[2]
-        size = row[3]
-        update_type = row[0]
-        is_buy = row[1]
+        price = row[3]
+        size = row[4]
+        update_type = row[1]
+        is_buy = row[2]
         if is_buy == 1.0:
             price_idx = find_price_index(buys[:, 0], price)
             if price_idx != -1:
                 buys = order_book_update(buys, update_type, price_idx, price, size)
+                buys = sort_levels(buys)
             else:
                 buys = add_slice(buys, price, size)        
                 buys = sort_levels(buys)
@@ -138,12 +139,14 @@ def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128
             price_idx = find_price_index(sells[:, 0], price)
             if price_idx != -1:
                 sells = order_book_update(sells, update_type, price_idx, price, size)
+                sells = sort_levels(sells)
             else:
                 sells = add_slice(sells, price, size)
                 sells = sort_levels(sells)
             
         consolidated[:max_size//2, :] = buys
         consolidated[max_size//2:, :] = sells
+        #consolidated = sort_levels(consolidated)
 
         #consolidated = np.concatenate((buys, sells), axis=0)
         if flag is False:
@@ -156,18 +159,20 @@ def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128
             
 if __name__ == "__main__":
     depth = 96
-    subsample = 10
+    subsample = 1
     azure = False
+    pair = "XRP_BTC"
     if azure:
         raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
     else:
-        raw_data = np.load("/media/qhawkins/SSD3/btc_usdt_20231201_20241201.npy", mmap_mode='r')
+        raw_data = np.load("/media/qhawkins/SSD3/XRP_BTC_20231201_20241201.npy", mmap_mode='r')[:32768]
+    
     print("loaded")
     print(raw_data.shape)
-    print(raw_data[0, :])
-    print(raw_data[-1, :])
+    #print(raw_data[0, :])
+    #print(raw_data[-1, :])
     #exit()
-    results = np.zeros((len(raw_data)//subsample, depth, 2), dtype=np.float32, order="C")
+    results = np.zeros((len(raw_data)//subsample, depth, 2), dtype=np.float64, order="C")
     ob_state, start_idx = optimized_order_book(raw_data, results, depth, subsample=subsample)
 
     #drop any rows with 0s
@@ -179,14 +184,17 @@ if __name__ == "__main__":
     #ob_state = ob_state[:, :, :-1]
     #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
     #print(f"Ob_state shape: {ob_state.shape}")
+    '''
     if azure:
         np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
     
     else:
-        np.save("/media/qhawkins/SSD3/btc_usdt_full_parsed.npy", ob_state)
+        np.save(f"/media/qhawkins/SSD3/{pair}_full_parsed.npy", ob_state)
+    
+    '''
     
     
-    #ob_state = torch.tensor(ob_state, dtype=torch.float32, requires_grad=False)
+    #ob_state = torch.tensor(ob_state, dtype=torch.float64, requires_grad=False)
     #print(f"bf16 {ob_state_bf16[-1, :, :]}")
     for idx, entry in enumerate(ob_state[-1, :, :]):
         print(f"Slice {idx}, price: {entry[0]}, size: {entry[1]}")
