@@ -133,7 +133,8 @@ if __name__ == "__main__":
     traced_script_module = torch.jit.trace(model, (ob_example, state_example))
 
     output: torch.Tensor = traced_script_module(ob_example, state_example)
-    print(output.shape)
+    print(output[0].shape)
+    print(output[1].shape)
 
     # Save the traced model
     torch.jit.save(traced_script_module, "ppo_model.pt")
