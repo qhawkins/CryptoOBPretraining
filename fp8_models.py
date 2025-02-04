@@ -1425,7 +1425,7 @@ class PPOModel(torch.nn.Module):
         self.policy_fc4_activation = torch.nn.ReLU()
         self.policy_fc4_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_output = torch.nn.Linear(self.temporal_dim*512, 4)
+        self.policy_output = torch.nn.Linear(self.temporal_dim*512, 3)
 
     
     def forward(self, ob_input, state_input):
