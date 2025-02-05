@@ -894,7 +894,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
             activation="gelu",
             batch_first=True,
         )
-        
+        """
         self.encoder9 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
             dim_feedforward=1536,
@@ -1182,6 +1182,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
             activation="gelu",
             batch_first=True,
         )
+        """
     
     def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
@@ -1232,6 +1233,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         output = self.encoder6(output)
         output = self.encoder7(output)
         output = self.encoder8(output)
+        """
         output = self.encoder9(output)
         output = self.encoder10(output)
         output = self.encoder11(output)
@@ -1264,7 +1266,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         output = self.encoder38(output)
         output = self.encoder39(output)
         output = self.encoder40(output)
-
+        """
         output = self.output_fc(output)
         output = self.output_relu(output)
         output = self.output_dropout(output)

@@ -107,11 +107,11 @@ def parse_state_dict(state_dict: dict) -> dict:
 
 def load_model(path: str):
     ob_model = DeepNarrowTransformerModelPT((256, 96, 2), (256, 96, 2), 0.25)
-    state_dict = torch.load(path)  # Addressing FutureWarning
-    state_dict = state_dict['model_state_dict']
-    state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
-    state_dict = parse_state_dict(state_dict)
-    ob_model.load_state_dict(state_dict)
+    #state_dict = torch.load(path)  # Addressing FutureWarning
+    #state_dict = state_dict['model_state_dict']
+    #state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
+    #state_dict = parse_state_dict(state_dict)
+    #ob_model.load_state_dict(state_dict)
     ppo_model = PPOModel((256, 96, 2), (256, 96, 2), 0.25, 16, ob_model)
     # ppo_model.eval()  # Typically used for evaluation mode
     return ppo_model
