@@ -1280,114 +1280,21 @@ class StateEncoder(torch.nn.Module):
         self.temporal_dim = temporal_dim
         self.output_shape = output_shape
         self.dropout = dropout
-        self.base = 10000.0
-        half_dim = (self.state_features_dim) // 2
-
-        # Create position indices [0, 1, ..., T-1]
-        position = torch.arange(self.temporal_dim, dtype=torch.float32).unsqueeze(1)  # (T, 1)
-
-        # Compute the inverse frequencies
-        div_term = torch.exp(
-            torch.arange(0, half_dim, dtype=torch.float32) * (-torch.log(torch.tensor(self.base)) / half_dim)
-        )  # (half_dim,)
-
-        # Compute the angles (T, half_dim)
-        angles = position * div_term  # (T, half_dim)
-
-        # Compute sin and cos
-        sin = torch.sin(angles).requires_grad_(False)  # (T, half_dim)
-        cos = torch.cos(angles).requires_grad_(False)  # (T, half_dim)
-        sin = sin.unsqueeze(0)#.unsqueeze(-1)  # (1, T, 1, F//2)
-        cos = cos.unsqueeze(0)#.unsqueeze(-1)
-
-        # Register as buffers to ensure they are moved with the model and not trained
-        self.register_buffer('sin', sin)  # (T, half_dim)
-        self.register_buffer('cos', cos)  # (T, half_dim)
 
         self.embedding_layer = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
         self.embedding_relu = torch.nn.ReLU()
         self.embedding_dropout = torch.nn.Dropout(dropout)
-
-        self.state_encoder_1 = torch.nn.TransformerEncoderLayer(
-            d_model=(self.state_features_dim),
-            dim_feedforward=1536,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
         
-        self.state_encoder_2 = torch.nn.TransformerEncoderLayer(
-            d_model=(self.state_features_dim),
-            dim_feedforward=1536,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-
-        self.state_encoder_3 = torch.nn.TransformerEncoderLayer(
-            d_model=(self.state_features_dim),
-            dim_feedforward=1536,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        self.state_encoder_4 = torch.nn.TransformerEncoderLayer(
-            d_model=(self.state_features_dim),
-            dim_feedforward=1536,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        
-        self.output_fc = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
+        self.output_fc = torch.nn.Linear(self.state_features_dim, self.state_features_dim*2)
         self.output_relu = torch.nn.ReLU()
         self.output_dropout = torch.nn.Dropout(dropout)
     
-    def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
-        """
-        Applies Rotary Positional Embeddings to the input tensor.
-
-        Args:
-            x (torch.Tensor): Input tensor of shape (B, T, F).
-            sin (torch.Tensor): Sine embeddings of shape (T, F/2).
-            cos (torch.Tensor): Cosine embeddings of shape (T, F/2).
-
-        Returns:
-            torch.Tensor: Tensor with RoPE applied, shape (B, T, F).
-        """
-        # Ensure the feature dimension is even
-
-        # Split the features into even and odd
-        x_even = x[..., 0::2]  # (B, T, F/2)
-        x_odd = x[..., 1::2]   # (B, T, F/2)
-
-        # Apply rotation
-        x_rotated_even = x_even * cos - x_odd * sin
-        x_rotated_odd = x_even * sin + x_odd * cos
-
-        # Interleave the rotated even and odd features
-        x_rotated = torch.stack((x_rotated_even, x_rotated_odd), dim=-1).reshape_as(x)  # (B, T, F)
-
-        return x_rotated
-    
-    
     def forward(self, input):
-        input = self.apply_rotary_pos_emb(input, self.sin, self.cos)  # (B, T, F)
-
         embedding = self.embedding_layer(input)
         embedding = self.embedding_relu(embedding)
         embedding = self.embedding_dropout(embedding)
 
-        output = self.state_encoder_1(embedding)
-        output = self.state_encoder_2(output)
-        output = self.state_encoder_3(output)
-        output = self.state_encoder_4(output)
-
-        output = self.output_fc(output)
+        output = self.output_fc(embedding)
         output = self.output_relu(output)
         output = self.output_dropout(output)
 
@@ -1400,16 +1307,7 @@ class PPOModel(torch.nn.Module):
         self.ob_encoder: DeepNarrowTransformerModelPT = ob_encoder
         self.state_encoder = StateEncoder(state_features_dim=state_features_dim, temporal_dim=input_shape[0], output_shape=output_shape, dropout=dropout)
 
-        self.policy_encoder = torch.nn.TransformerEncoderLayer(
-            d_model=(state_features_dim + (input_shape[1]*input_shape[2])),
-            dim_feedforward=1024,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-            
-        self.policy_fc1 = torch.nn.Linear(state_features_dim + (input_shape[1]*input_shape[2]), 1024)
+        self.policy_fc1 = torch.nn.Linear(64, 1024)
         self.policy_fc1_activation = torch.nn.ReLU()
         self.policy_fc1_dropout = torch.nn.Dropout(dropout)
 
@@ -1425,18 +1323,18 @@ class PPOModel(torch.nn.Module):
         self.policy_fc4_activation = torch.nn.ReLU()
         self.policy_fc4_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_output = torch.nn.Linear(self.temporal_dim*512, 3)
-        self.value_output = torch.nn.Linear(self.temporal_dim*512, 1)
+        self.policy_output = torch.nn.Linear(512, 3)
+        self.value_output = torch.nn.Linear(512, 1)
+        self.ob_state_reducer = torch.nn.Linear(self.ob_encoder.depth_dim * self.ob_encoder.features_dim * self.ob_encoder.temporal_dim, 32)
 
     
     def forward(self, ob_input, state_input):
         ob_output = self.ob_encoder(ob_input)
-        ob_output = ob_output.view(-1, self.temporal_dim, (self.ob_encoder.depth_dim * self.ob_encoder.features_dim))
+        ob_output = ob_output.view(-1, (self.ob_encoder.depth_dim * self.ob_encoder.features_dim * self.ob_encoder.temporal_dim))
+        ob_output = self.ob_state_reducer(ob_output)
         state_output = self.state_encoder(state_input)
 
         x = torch.cat((ob_output, state_output), dim=-1)
-
-        x = self.policy_encoder(x)
 
         x = self.policy_fc1(x)
         x = self.policy_fc1_activation(x)

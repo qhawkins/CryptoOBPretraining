@@ -118,8 +118,8 @@ def load_model(path: str):
 
 if __name__ == "__main__":
     model: PPOModel = load_model("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000116003_epoch_5_mse_deep_narrow_transformer.pth")
-    ob_example = torch.rand(1, 256, 96, 2).to("cuda")
-    state_example = torch.rand(1, 256, 16).to("cuda")
+    ob_example = torch.rand(32, 256, 96, 2).to("cuda")
+    state_example = torch.rand(32, 16).to("cuda")
 
     model = model.to("cuda")
 
