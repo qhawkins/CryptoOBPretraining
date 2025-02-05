@@ -105,19 +105,22 @@ def parse_state_dict(state_dict: dict) -> dict:
 
     return output_state_dict
 
-def load_model(path: str):
-    ob_model = DeepNarrowTransformerModelPT((256, 96, 2), (256, 96, 2), 0.25)
+def load_model(path: str, dropout: float, shapes: tuple, state_features: int) -> PPOModel:
+    ob_model = DeepNarrowTransformerModelPT(shapes, shapes, dropout)
     #state_dict = torch.load(path)  # Addressing FutureWarning
     #state_dict = state_dict['model_state_dict']
     #state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
     #state_dict = parse_state_dict(state_dict)
     #ob_model.load_state_dict(state_dict)
-    ppo_model = PPOModel((256, 96, 2), (256, 96, 2), 0.25, 16, ob_model)
+    ppo_model = PPOModel(shapes, shapes, dropout, state_features, ob_model)
     # ppo_model.eval()  # Typically used for evaluation mode
     return ppo_model
 
 if __name__ == "__main__":
-    model: PPOModel = load_model("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000116003_epoch_5_mse_deep_narrow_transformer.pth")
+    shapes = (256, 96, 2)
+    dropout = 0.0
+    state_features = 16
+    model: PPOModel = load_model("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000116003_epoch_5_mse_deep_narrow_transformer.pth", dropout, shapes, state_features)
     ob_example = torch.rand(32, 256, 96, 2).to("cuda")
     state_example = torch.rand(32, 16).to("cuda")
 
