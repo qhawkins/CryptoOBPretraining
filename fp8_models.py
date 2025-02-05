@@ -824,7 +824,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
 
         self.encoder1 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
@@ -834,7 +834,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         
         self.encoder2 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
@@ -843,7 +843,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         
         self.encoder3 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
@@ -852,7 +852,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         
         self.encoder4 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
@@ -861,7 +861,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         
         self.encoder5 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
@@ -870,7 +870,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         
         self.encoder6 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
@@ -879,7 +879,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         
         self.encoder7 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
@@ -1309,24 +1309,24 @@ class PPOModel(torch.nn.Module):
         self.ob_encoder: DeepNarrowTransformerModelPT = ob_encoder
         self.state_encoder = StateEncoder(state_features_dim=state_features_dim, temporal_dim=input_shape[0], output_shape=output_shape, dropout=dropout)
 
-        self.policy_fc1 = torch.nn.Linear(64, 1024)
+        self.policy_fc1 = torch.nn.Linear(64, 128)
         self.policy_fc1_activation = torch.nn.ReLU()
         self.policy_fc1_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc2 = torch.nn.Linear(1024, 2048)
+        self.policy_fc2 = torch.nn.Linear(128, 256)
         self.policy_fc2_activation = torch.nn.ReLU()
         self.policy_fc2_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc3 = torch.nn.Linear(2048, 1024)
+        self.policy_fc3 = torch.nn.Linear(256, 128)
         self.policy_fc3_activation = torch.nn.ReLU()
         self.policy_fc3_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc4 = torch.nn.Linear(1024, 512)
+        self.policy_fc4 = torch.nn.Linear(128, 64)
         self.policy_fc4_activation = torch.nn.ReLU()
         self.policy_fc4_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_output = torch.nn.Linear(512, 3)
-        self.value_output = torch.nn.Linear(512, 1)
+        self.policy_output = torch.nn.Linear(64, 3)
+        self.value_output = torch.nn.Linear(64, 1)
         self.ob_state_reducer = torch.nn.Linear(self.ob_encoder.depth_dim * self.ob_encoder.features_dim * self.ob_encoder.temporal_dim, 32)
 
     
