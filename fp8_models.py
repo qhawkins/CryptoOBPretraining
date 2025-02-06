@@ -888,7 +888,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         
         self.encoder8 = torch.nn.TransformerEncoderLayer(
             d_model=(self.features_dim*self.depth_dim),
-            dim_feedforward=1536,
+            dim_feedforward=512,
             nhead=8,
             dropout=dropout,
             activation="gelu",
