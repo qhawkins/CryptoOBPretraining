@@ -118,7 +118,7 @@ def load_model(path: str, dropout: float, shapes: tuple, state_features: int) ->
     return ppo_model
 
 if __name__ == "__main__":
-    temporal_dim = 2048
+    temporal_dim = 1536
     shapes = (temporal_dim, 96, 2)
     dropout = 0.0
     state_features = 16
