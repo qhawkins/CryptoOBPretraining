@@ -118,13 +118,13 @@ def load_model(path: str, dropout: float, shapes: tuple, state_features: int) ->
     return ppo_model
 
 if __name__ == "__main__":
-    temporal_dim = 1536
+    temporal_dim = 4096
     shapes = (temporal_dim, 96, 2)
     dropout = 0.0
     state_features = 16
     model: PPOModel = load_model("/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000116003_epoch_5_mse_deep_narrow_transformer.pth", dropout, shapes, state_features)
-    ob_example = torch.rand(32, temporal_dim, 96, 2).to("cuda")
-    state_example = torch.rand(32, 16).to("cuda")
+    ob_example = torch.rand(256, temporal_dim, 96, 2).to("cuda")
+    state_example = torch.rand(256, 16).to("cuda")
 
     model = model.to("cuda")
 

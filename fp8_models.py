@@ -796,11 +796,11 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
 
 
         # Create position indices [0, 1, ..., T-1]
-        position = torch.arange(self.temporal_dim, dtype=torch.float32).unsqueeze(1)  # (T, 1)
+        position = torch.arange(self.temporal_dim, dtype=torch.float16).unsqueeze(1)  # (T, 1)
 
         # Compute the inverse frequencies
         div_term = torch.exp(
-            torch.arange(0, half_dim, dtype=torch.float32) * (-torch.log(torch.tensor(self.base)) / half_dim)
+            torch.arange(0, half_dim, dtype=torch.float16) * (-torch.log(torch.tensor(self.base)) / half_dim)
         )  # (half_dim,)
 
         # Compute the angles (T, half_dim)
@@ -829,7 +829,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         self.output_relu = torch.nn.ReLU()
         self.output_dropout = torch.nn.Dropout(dropout)
 
-        self.encoder1 = torch.nn.TransformerEncoderLayer(
+        encoder_layer = torch.nn.TransformerEncoderLayer(
             d_model=(int(self.depth_dim/2)),
             dim_feedforward=512,
             nhead=8,
@@ -837,69 +837,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
             activation="gelu",
             batch_first=True,
         )
-
-        self.encoder2 = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),            
-            dim_feedforward=512,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        
-        self.encoder3 = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),            
-            dim_feedforward=512,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        
-        self.encoder4 = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),            
-            dim_feedforward=512,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        
-        self.encoder5 = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),            
-            dim_feedforward=512,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        
-        self.encoder6 = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),            
-            dim_feedforward=512,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        
-        self.encoder7 = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),            
-            dim_feedforward=512,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
-        
-        self.encoder8 = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),            
-            dim_feedforward=512,
-            nhead=8,
-            dropout=dropout,
-            activation="gelu",
-            batch_first=True,
-        )
+        self.encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=8)
     
     def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
@@ -949,15 +887,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         #embedding = self.embedding_dropout(embedding)
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
-        output = self.encoder1(input)
-        output = self.encoder2(output)
-        output = self.encoder3(output)
-        output = self.encoder4(output)
-        output = self.encoder5(output)
-        output = self.encoder6(output)
-        output = self.encoder7(output)
-        output = self.encoder8(output)
-        
+        output = self.encoder(input)
         output = output.view(-1, int(self.depth_dim/2)*self.out_channels)
 
         output = self.output_fc(output)
@@ -1019,7 +949,6 @@ class PPOModel(torch.nn.Module):
 
         self.policy_output = torch.nn.Linear(64, 3)
         self.value_output = torch.nn.Linear(64, 1)
-        self.ob_state_reducer = torch.nn.Linear(self.ob_encoder.depth_dim * self.ob_encoder.features_dim * self.ob_encoder.temporal_dim, 32)
 
     
     def forward(self, ob_input, state_input):
