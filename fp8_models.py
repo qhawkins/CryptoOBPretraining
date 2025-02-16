@@ -837,7 +837,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
             activation="gelu",
             batch_first=True,
         )
-        self.encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=8)
+        self.encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=12)
     
     def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
@@ -906,18 +906,34 @@ class StateEncoder(torch.nn.Module):
         self.output_shape = output_shape
         self.dropout = dropout
 
-        self.embedding_layer = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
-        self.embedding_relu = torch.nn.ReLU()
-        self.embedding_dropout = torch.nn.Dropout(dropout)
+        self.embedding_layer1 = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
+        self.embedding_relu1 = torch.nn.ReLU()
+        self.embedding_dropout1 = torch.nn.Dropout(dropout)
+        
+        self.embedding_layer2 = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
+        self.embedding_relu2 = torch.nn.ReLU()
+        self.embedding_dropout2 = torch.nn.Dropout(dropout)
+        
+        self.embedding_layer3 = torch.nn.Linear(self.state_features_dim, self.state_features_dim)
+        self.embedding_relu3 = torch.nn.ReLU()
+        self.embedding_dropout3 = torch.nn.Dropout(dropout)
         
         self.output_fc = torch.nn.Linear(self.state_features_dim, self.state_features_dim*2)
         self.output_relu = torch.nn.ReLU()
         self.output_dropout = torch.nn.Dropout(dropout)
     
     def forward(self, input):
-        embedding = self.embedding_layer(input)
-        embedding = self.embedding_relu(embedding)
-        embedding = self.embedding_dropout(embedding)
+        embedding = self.embedding_layer1(input)
+        embedding = self.embedding_relu1(embedding)
+        embedding = self.embedding_dropout1(embedding)
+
+        embedding = self.embedding_layer2(embedding)
+        embedding = self.embedding_relu2(embedding)
+        embedding = self.embedding_dropout2(embedding)
+
+        embedding = self.embedding_layer3(embedding)
+        embedding = self.embedding_relu3(embedding)
+        embedding = self.embedding_dropout3(embedding)
 
         output = self.output_fc(embedding)
         output = self.output_relu(output)
@@ -931,6 +947,7 @@ class PPOModel(torch.nn.Module):
         self.temporal_dim = input_shape[0]
         self.ob_encoder: DeepNarrowTransformerModelPT = ob_encoder
         self.state_encoder = StateEncoder(state_features_dim=state_features_dim, temporal_dim=input_shape[0], output_shape=output_shape, dropout=dropout)
+        
         self.policy_fc1 = torch.nn.Linear(64, 128)
         self.policy_fc1_activation = torch.nn.ReLU()
         self.policy_fc1_dropout = torch.nn.Dropout(dropout)
@@ -939,18 +956,26 @@ class PPOModel(torch.nn.Module):
         self.policy_fc2_activation = torch.nn.ReLU()
         self.policy_fc2_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc3 = torch.nn.Linear(256, 128)
+        self.policy_fc3 = torch.nn.Linear(256, 512)
         self.policy_fc3_activation = torch.nn.ReLU()
         self.policy_fc3_dropout = torch.nn.Dropout(dropout)
 
-        self.policy_fc4 = torch.nn.Linear(128, 64)
+        self.policy_fc4 = torch.nn.Linear(512, 256)
         self.policy_fc4_activation = torch.nn.ReLU()
         self.policy_fc4_dropout = torch.nn.Dropout(dropout)
+
+
+        self.policy_fc5 = torch.nn.Linear(256, 128)
+        self.policy_fc5_activation = torch.nn.ReLU()
+        self.policy_fc5_dropout = torch.nn.Dropout(dropout)
+
+        self.policy_fc6 = torch.nn.Linear(128, 64)
+        self.policy_fc6_activation = torch.nn.ReLU()
+        self.policy_fc6_dropout = torch.nn.Dropout(dropout)
 
         self.policy_output = torch.nn.Linear(64, 3)
         self.value_output = torch.nn.Linear(64, 1)
 
-    
     def forward(self, ob_input, state_input):
         ob_output = self.ob_encoder(ob_input)
         #print(f"ob encoder shape: {ob_output.shape}")
@@ -975,6 +1000,14 @@ class PPOModel(torch.nn.Module):
         x = self.policy_fc4(x)
         x = self.policy_fc4_activation(x)
         x = self.policy_fc4_dropout(x)
+
+        x = self.policy_fc5(x)
+        x = self.policy_fc5_activation(x)
+        x = self.policy_fc5_dropout(x)
+
+        x = self.policy_fc6(x)
+        x = self.policy_fc6_activation(x)
+        x = self.policy_fc6_dropout(x)
 
         x = x.flatten(start_dim=1)
         value = self.value_output(x)
