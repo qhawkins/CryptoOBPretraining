@@ -15,14 +15,15 @@ from fp8_models import TinyTransformerModel, MediumTransformerModel, DeepNarrowT
 from transformer_engine.common.recipe import Format, DelayedScaling
 import transformer_engine.pytorch as te
 
+# allow tf32 format for increased performance on modern Nvidia GPUs
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 
+# tensorboard for logging and diagnostics
 from tensorboardX import SummaryWriter
 
 
-
-# Define your apply_mask function (unchanged)
+# Define your apply_mask function
 def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, device='cuda'):
 	"""
 	Applies masking to the input tensor.
@@ -47,16 +48,30 @@ def apply_mask(inputs: torch.Tensor, mask_percentage=0.15, mask_value=0.0, devic
 	
 	return masked_inputs, mask
 
-# Adapted Trainer class with DDP support
+# Adapted Trainer class with adaptive DDP support for both single and multi-GPU setups
 class Trainer:
-	def __init__(self, config, rank, world_size, train_dataset: tuple, test_dataset: tuple, dp_group):
+	def __init__(self, config, rank, world_size, train_dataset: tuple, test_dataset: tuple, dp_group=None, use_ddp=True):
+		"""
+		Initialize trainer with support for both single and multi-GPU setups.
+		
+		Args:
+			config: Configuration dictionary
+			rank: GPU rank (0 for single GPU)
+			world_size: Number of GPUs (1 for single GPU)
+			train_dataset: Training dataset
+			test_dataset: Testing dataset
+			dp_group: Data parallel group (None for single GPU)
+			use_ddp: Whether to use DDP (False for single GPU)
+		"""
 		self.config = config
 		self.train_dataset = train_dataset
 		self.test_dataset = test_dataset
 		self.rank = rank
 		self.world_size = world_size
 		self.dp_group = dp_group
+		self.use_ddp = use_ddp
 		self.device = torch.device(f'cuda:{rank}' if torch.cuda.is_available() else 'cpu')
+		
 		# Initialize the model
 		self.initialize_model()
 		
@@ -86,11 +101,11 @@ class Trainer:
 		self.model = MediumTransformerModel((self.config["temporal_dim"], self.config["depth_dim"], 2), (self.config["temporal_dim"], self.config["depth_dim"], 2), self.config['dropout'])
 		state_dict = torch.load(path)
 		state_dict = state_dict['model_state_dict']
+		# Handle loading state dict for both DDP and non-DDP models
 		state_dict = {k.replace("module.", "").replace("_orig_mod.", ""): v for k, v in state_dict.items()}
 		self.model.load_state_dict(state_dict)
 		self.model = self.model.to(self.device)
 		self.model = self.model.train()
-		#self.model = self.model.compile()
 
 	def initialize_model(self):
 		model_size = self.config['model_size']
@@ -110,17 +125,16 @@ class Trainer:
 		if self.config['load_model']:
 			self.load_model(self.config['model_path'])
 			print(f"Model loaded from {self.config['model_path']}")
-
 		else:
 			self.model = model_classes[model_size](
 				(temporal_dim, depth_dim, 2),
 				(temporal_dim, depth_dim, 2),
 				dropout,
-				#data_parallel_group=self.data_parallel_group
 			).to(self.device)
 			
-			# Wrap the model with DDP
-		self.model = DDP(self.model, device_ids=[self.rank])#, process_group=self.data_parallel_group)
+		# Wrap the model with DDP only if using multiple GPUs
+		if self.use_ddp and self.world_size > 1:
+			self.model = DDP(self.model, device_ids=[self.rank])
 		
 	def initialize_criterion_optimizer(self):
 		loss_type = self.config['loss']
@@ -147,64 +161,91 @@ class Trainer:
 			raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
 		
 	def load_data(self):
-		# Load your dataset
-		
 		# Create dataset splits
 		self.split_data()
 		
-		# Create DistributedSampler
-		self.train_sampler = DistributedSampler(
-			self.train_ds,
-			num_replicas=self.world_size,
-			rank=self.rank,
-			shuffle=True
-		)
-		
-		self.val_sampler = DistributedSampler(
-			self.val_ds,
-			num_replicas=self.world_size,
-			rank=self.rank,
-			shuffle=False
-		)
-		
-		self.test_sampler = DistributedSampler(
-			self.test_ds,
-			num_replicas=self.world_size,
-			rank=self.rank,
-			shuffle=False
-		)
-		
-		# Create DataLoaders with DistributedSampler
-		self.train_dataloader = DataLoader(
-			self.train_ds,
-			batch_size=self.config['batch_size'],
-			sampler=self.train_sampler,
-			drop_last=True,
-			num_workers=5,
-			pin_memory=True,
-			prefetch_factor=4,
-		)
-		
-		self.val_dataloader = DataLoader(
-			self.val_ds,
-			batch_size=self.config['batch_size'],
-			sampler=self.val_sampler,
-			drop_last=True,
-			num_workers=4,
-			pin_memory=True,
-		)
-		
-		self.test_dataloader = DataLoader(
-			self.test_ds,
-			batch_size=self.config['batch_size'],
-			sampler=self.test_sampler,
-			drop_last=True,
-			num_workers=4,
-			pin_memory=True,
-		)
+		# Use DistributedSampler for multi-GPU, regular DataLoader for single-GPU
+		if self.use_ddp and self.world_size > 1:
+			self.train_sampler = DistributedSampler(
+				self.train_ds,
+				num_replicas=self.world_size,
+				rank=self.rank,
+				shuffle=True
+			)
+			
+			self.val_sampler = DistributedSampler(
+				self.val_ds,
+				num_replicas=self.world_size,
+				rank=self.rank,
+				shuffle=False
+			)
+			
+			self.test_sampler = DistributedSampler(
+				self.test_ds,
+				num_replicas=self.world_size,
+				rank=self.rank,
+				shuffle=False
+			)
+			
+			# Create DataLoaders with DistributedSampler
+			self.train_dataloader = DataLoader(
+				self.train_ds,
+				batch_size=self.config['batch_size'],
+				sampler=self.train_sampler,
+				drop_last=True,
+				num_workers=5,
+				pin_memory=True,
+				prefetch_factor=4,
+			)
+			
+			self.val_dataloader = DataLoader(
+				self.val_ds,
+				batch_size=self.config['batch_size'],
+				sampler=self.val_sampler,
+				drop_last=True,
+				num_workers=4,
+				pin_memory=True,
+			)
+			
+			self.test_dataloader = DataLoader(
+				self.test_ds,
+				batch_size=self.config['batch_size'],
+				sampler=self.test_sampler,
+				drop_last=True,
+				num_workers=4,
+				pin_memory=True,
+			)
+		else:
+			# For single GPU setup, use regular DataLoader with shuffle instead of sampler
+			self.train_dataloader = DataLoader(
+				self.train_ds,
+				batch_size=self.config['batch_size'],
+				shuffle=True,
+				drop_last=True,
+				num_workers=5,
+				pin_memory=True,
+				prefetch_factor=4,
+			)
+			
+			self.val_dataloader = DataLoader(
+				self.val_ds,
+				batch_size=self.config['batch_size'],
+				shuffle=False,
+				drop_last=True,
+				num_workers=4,
+				pin_memory=True,
+			)
+			
+			self.test_dataloader = DataLoader(
+				self.test_ds,
+				batch_size=self.config['batch_size'],
+				shuffle=False,
+				drop_last=True,
+				num_workers=4,
+				pin_memory=True,
+			)
 		
 	def split_data(self):
-		#total_size = np.load(self.train_dataset, mmap_mode="r").shape[0]
 		train_sizes = (
 			int(np.load(self.train_dataset[0], mmap_mode="r").shape[0]*self.config['split_ratios'][0]),
 			int(np.load(self.train_dataset[1], mmap_mode="r").shape[0]*self.config['split_ratios'][0])
@@ -218,13 +259,6 @@ class Trainer:
 			int((np.load(self.train_dataset[1], mmap_mode="r").shape[0] * self.config['split_ratios'][1]) + train_sizes[1])
 		)
 
-		#train_size = int(self.config['split_ratios'][0] * total_size)
-		#val_size = int(self.config['split_ratios'][1] * total_size)
-
-		####
-		#train_size = 10000
-		#val_size = 1000
-		####		
 		self.train_ds = PretrainingDataset(
 			self.train_dataset,
 			(0, 0), 
@@ -285,10 +319,9 @@ class Trainer:
 				f"{self.config['loss']}_{self.config['model_size']}.pth"
 			)
 
-
 		torch.save({
 			'epoch': epoch,
-			'model_state_dict': self.model.state_dict(),  # Access the underlying model
+			'model_state_dict': self.model.state_dict(),  # Handle both DDP and non-DDP models
 			'optimizer_state_dict': self.optimizer.state_dict(),
 			'val_loss': val_loss,
 			'loss_function': self.config['loss'],
@@ -304,6 +337,7 @@ class Trainer:
 		if self.rank == 0:
 			print(f"Model: {self.model_name}")
 			print(f"Number of parameters: {sum(p.numel() for p in self.model.parameters() if p.requires_grad)}")
+			print(f"Using DDP: {self.use_ddp}, Number of GPUs: {self.world_size}")
 	
 	def train(self, epochs):
 		self.print_model_params()
@@ -314,7 +348,10 @@ class Trainer:
 		
 		for epoch in range(epochs):
 			epoch_start_time = time.time()
-			self.train_sampler.set_epoch(epoch)  # Shuffle data differently at each epoch
+			# Set epoch for DistributedSampler (only in DDP mode)
+			if self.use_ddp and self.world_size > 1:
+				self.train_sampler.set_epoch(epoch)
+				
 			self.model.train()
 			avg_train_loss = 0
 			self.step_losses = []
@@ -328,38 +365,55 @@ class Trainer:
 					device=self.device
 				)
 				
-				if (i + 1) % self.config["accumulation_steps"] != 0:
-					with self.model.no_sync():				
+				# Handle gradient accumulation differently for DDP vs non-DDP
+				if self.use_ddp and self.world_size > 1:
+					# DDP mode with gradient accumulation
+					if (i + 1) % self.config["accumulation_steps"] != 0:
+						with self.model.no_sync():				
+							with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
+								outputs = self.model(masked_inputs)
+								loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
+							loss.backward()
+					else:
 						with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 							outputs = self.model(masked_inputs)
 							loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
-						#loss = loss / self.config["accumulation_steps"]
 						loss.backward()
+						torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config["max_grad_norm"])
+						self.optimizer.step()
+						if self.config['use_scheduler']:
+							self.scheduler.step()
+						self.optimizer.zero_grad(set_to_none=True)
 				else:
+					# Non-DDP mode with gradient accumulation (simpler)
 					with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 						outputs = self.model(masked_inputs)
 						loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
-					#	loss = loss/ self.config["accumulation_steps"]
+						loss = loss / self.config["accumulation_steps"]
+					
 					loss.backward()
-					torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config["max_grad_norm"])
-					self.optimizer.step()
-					if self.config['use_scheduler']:
-						self.scheduler.step()
+					
+					if (i + 1) % self.config["accumulation_steps"] == 0:
+						torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config["max_grad_norm"])
+						self.optimizer.step()
+						if self.config['use_scheduler']:
+							self.scheduler.step()
+						self.optimizer.zero_grad(set_to_none=True)
 
-					if self.rank == 0 and (i+1) % 1000 == 0:
-						self.log_gradients_in_model(self.model, self.logger, i)
+				if self.rank == 0 and (i+1) % 1000 == 0:
+					self.log_gradients_in_model(self.model, self.logger, i)
 
-					self.optimizer.zero_grad(set_to_none=True)
-
+				# Save loss regardless of GPU count
+				loss_val = loss.item() * (self.config["accumulation_steps"] if not self.use_ddp else 1)
 				if self.config['azure']:
 					with open(f"/home/azureuser/single_models/{self.model_name}_epoch_train_losses.txt", "a+") as f:
-						f.write(f"{loss.item()}\n")
+						f.write(f"{loss_val}\n")
 				else:
 					with open(f"/media/qhawkins/SSD3/single_models/{self.model_name}_epoch_train_losses.txt", "a+") as f:
-						f.write(f"{loss.item()}\n")
+						f.write(f"{loss_val}\n")
 
-				avg_train_loss += loss.item()
-				self.step_losses.append(loss.item())
+				avg_train_loss += loss_val
+				self.step_losses.append(loss_val)
 			
 			avg_train_loss /= (i + 1)
 			
@@ -395,7 +449,6 @@ class Trainer:
 			if self.rank == 0:
 				self.train_loss_history.append(avg_train_loss)
 				self.val_loss_history.append(avg_val_loss)
-				#self.scheduler.step(avg_val_loss)
 				if self.config['azure']:
 					with open(f"/home/azureuser/single_models/{self.model_name}_train_losses.txt", "a+") as f:
 						f.write(f"{avg_train_loss}\n")
@@ -414,13 +467,12 @@ class Trainer:
 							f.write(f"{self.scheduler.get_last_lr()[0]}\n")
 
 				epoch_completion_time = epoch_end_time-epoch_start_time
-				#given the current system time and the time it took to complete the previous epoch, I want to estimate the system time at the completion of the next epoch
 				next_epoch_estimated_time = time.ctime(time.time() + epoch_completion_time)
 
 				if self.config['use_scheduler']:
-					print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
+					print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_completion_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.scheduler.get_last_lr()[0]}')
 				else:		
-					print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_end_time-epoch_start_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.config["lr"]}')
+					print(f'Epoch {epoch+1}/{epochs} finished in {round(epoch_completion_time, 2)} seconds, ETA of next epoch is {next_epoch_estimated_time}, Avg Train Loss: {avg_train_loss:.6f}, Avg Val Loss: {avg_val_loss:.6f}, Epoch learning rate: {self.config["lr"]}')
 				
 				self.save_model(epoch, avg_val_loss)
 				if avg_val_loss < best_val_loss:
@@ -430,11 +482,6 @@ class Trainer:
 						self.save_model(epoch, avg_val_loss)
 				else:
 					epochs_without_improvement += 1
-				
-				# Early Stopping Logic
-				#if epochs_without_improvement >= self.early_stopping_patience:
-				#	print("Early stopping triggered.")
-			#		break
 		
 		if self.rank == 0:
 			print(f"Training completed. Best model saved at: {self.best_model_path}")
@@ -501,126 +548,162 @@ class Trainer:
 		plt.legend()
 		plt.show()
 
+def single_gpu_training(config, train_dataset, test_dataset):
+    """
+    Training workflow for single GPU setup.
+    
+    Args:
+        config: Configuration dictionary
+        train_dataset: Training dataset
+        test_dataset: Testing dataset
+    """
+    # Set device to cuda:0 for single GPU
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    
+    # Initialize trainer with single GPU setup (no DDP)
+    trainer = Trainer(
+        config=config,
+        rank=0,
+        world_size=1,
+        train_dataset=train_dataset,
+        test_dataset=test_dataset,
+        dp_group=None,
+        use_ddp=False
+    )
+    
+    # Train the model
+    trainer.train(epochs=config['epochs'])
+    
+    # Test the model
+    trainer.test()
+    
+    # Plot loss
+    trainer.plot_loss()
+
 def main_worker(rank, world_size, config, train_dataset, test_dataset):
-	#os.environ['MASTER_ADDR'] = 'localhost'
-	#os.environ['MASTER_PORT'] = '12355'
-	os.environ["MASTER_ADDR"] = "localhost"
-	os.environ["MASTER_PORT"] = "5000"
-	#os.environ['MASTER_ADDR'] = '127.0.0.1'
-	#os.environ['MASTER_PORT'] = '8000'
-	#os.environ["NCCL_SOCKET_IFNAME"] = "eno1"
-	
-	# Initialize the process group
-	dist.init_process_group(
-		backend=config['backend'],
-		init_method='env://',
-		world_size=world_size,
-		rank=rank
-	)
-	data_parallel_group = torch.distributed.new_group(ranks=[rank], backend=config['backend'])
-	
+    """
+    Worker function for multi-GPU distributed training.
+    
+    Args:
+        rank: GPU rank
+        world_size: Number of GPUs
+        config: Configuration dictionary
+        train_dataset: Training dataset
+        test_dataset: Testing dataset
+    """
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "5000"
+    
+    # Initialize the process group
+    dist.init_process_group(
+        backend=config['backend'],
+        init_method='env://',
+        world_size=world_size,
+        rank=rank
+    )
+    
+    # Create a data parallel group for FP8
+    data_parallel_group = torch.distributed.new_group(ranks=[rank], backend=config['backend'])
+    
+    # Set device
+    torch.cuda.set_device(rank)
 
-	# Create a Trainer instance
-	torch.cuda.set_device(rank)
-
-	trainer = Trainer(config, rank, world_size, train_dataset=train_dataset, test_dataset=test_dataset, dp_group=data_parallel_group)
-	
-	# Train the model
-	trainer.train(epochs=config['epochs'])
-	
-	# Test the model
-	#trainer.test()
-	
-	# Plot loss (only on master process)
-	trainer.plot_loss()
-	
-	# Cleanup
-	dist.destroy_process_group()
+    # Initialize DDP trainer
+    trainer = Trainer(
+        config=config, 
+        rank=rank, 
+        world_size=world_size, 
+        train_dataset=train_dataset, 
+        test_dataset=test_dataset, 
+        dp_group=data_parallel_group,
+        use_ddp=True
+    )
+    
+    # Train the model
+    trainer.train(epochs=config['epochs'])
+    
+    # Test the model (only on master process)
+    if rank == 0:
+        trainer.test()
+        trainer.plot_loss()
+    
+    # Cleanup
+    dist.destroy_process_group()
 
 def main():
-	world_size = 2  # Number of GPUs
-	
-	config = {
-		'azure': False,
-		'model_name': 'pretrained_ddp',
-		'split_ratios': [0.7, 0.25, 0.05],
-		'lr_decay_factor': 0.5,  # Fixed value instead of tune.choice
-		'lr_decay_patience': 5,
-		'early_stopping_patience': 15,
-		'best_model_path': "best_model.pth",
-		'dropout': 0.0,  # Fixed value instead of tune.choice
-		'optimizer': 'adamw',  # Fixed choice
-		'lr': 1e-4,  # Fixed or configurable as needed
-		'batch_size': 96, # Fixed value
-		'loss': 'mse',  # Fixed choice
-		#'model_size': "tiny_transformer",
-		#'model_size': "medium_transformer",
-		"model_size": "deep_narrow_transformer",
-		'temporal_dim': 256,
-		'mask_perc': 0.25,  # Fixed choice
-		'depth_dim': 96,
-		'epochs': 10,  # Define the number of epochs
-		'load_model': False,
-		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
-		'max_lr': 2.5e-4,
-		"backend": "nccl",
-		"accumulation_steps": 4,
-		"max_grad_norm": 1.5,
-		"use_scheduler": True
-	}
-	
-	#torch.multiprocessing.set_sharing_strategy('file_system')
-	mp.set_start_method('spawn')
+    """
+    Main entry point for training.
+    Determines whether to use single or multi-GPU setup based on available GPUs.
+    """
+    # Detect available GPUs
+    num_gpus = torch.cuda.device_count()
+    world_size = min(num_gpus, 2)  # Use at most 2 GPUs (as per original code)
+    
+    config = {
+        'azure': False,
+        'model_name': 'pretrained_ddp',
+        'split_ratios': [0.7, 0.25, 0.05],
+        'lr_decay_factor': 0.5,
+        'lr_decay_patience': 5,
+        'early_stopping_patience': 15,
+        'best_model_path': "best_model.pth",
+        'dropout': 0.0,
+        'optimizer': 'adamw',
+        'lr': 1e-4,
+		#reduced batch size for explanatory purposes
+        'batch_size': 48, #used to be 96
+        'loss': 'mse',
+        "model_size": "deep_narrow_transformer",
+        'temporal_dim': 256,
+        'mask_perc': 0.25,
+        'depth_dim': 96,
+        'epochs': 10,
+        'load_model': False,
+        'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
+        'max_lr': 2.5e-4,
+        "backend": "nccl",
+        "accumulation_steps": 4,
+        "max_grad_norm": 1.5,
+        "use_scheduler": True
+    }
+    
+    # Define datasets
+    if config["azure"]:
+        shared_train_dataset = "/home/azureuser/datadrive/train_indices.npy"
+        shared_test_dataset = "/home/azureuser/datadrive/test_indices.npy"
+    else:
+        shared_train_dataset = (
+            "/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_train_indices.npy",
+            "/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_train_indices.npy"
+        )
+        shared_test_dataset = (
+            "/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_test_indices.npy",
+            "/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_test_indices.npy"
+        )
+    
+    # Use single GPU if only one is available, otherwise use DDP
+    if world_size <= 1:
+        print("Single GPU detected. Using single GPU training...")
+        single_gpu_training(config, shared_train_dataset, shared_test_dataset)
+    else:
+        print(f"Multiple GPUs detected ({world_size}). Using DDP for multi-GPU training...")
+        # Set up for multi-GPU training
+        mp.set_start_method('spawn')
+        
+        # Spawn one process per GPU
+        children = []
+        for i in range(world_size):
+            subproc = mp.Process(
+                target=main_worker, 
+                args=(i, world_size, config, shared_train_dataset, shared_test_dataset)
+            )
+            children.append(subproc)
+            subproc.start()
+            print(f"Process {i} started.")
 
-	
-	#train_dataset_len = 1599976 #= np.load("/home/azureuser/data/train_dataset.npy", mmap_mode="r").shape[0]
-	#test_dataset_len = 399994#np.load("/home/azureuser/data/test_dataset.npy", mmap_mode="r").shape[0]
-	if config["azure"]:
-		shared_train_dataset = "/home/azureuser/datadrive/train_indices.npy"
-		shared_test_dataset = "/home/azureuser/datadrive/test_indices.npy"
-
-	else:
-		shared_train_dataset = (
-			"/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_train_indices.npy",
-			"/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_train_indices.npy"
-			)
-
-		shared_test_dataset = (
-			"/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_test_indices.npy",
-			"/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_test_indices.npy"
-			)
-		
-	#shared_dataset = torch.from_numpy(shared_dataset)
-	#shared_train_dataset = torch.from_file("/home/azureuser/data/train_dataset.npy", dtype = torch.float32, size=train_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
-	#shared_test_dataset = torch.from_file("/home/azureuser/data/test_dataset.npy", dtype = torch.float32, size=test_dataset_len*config["temporal_dim"]*config["depth_dim"]*2)
-	#shared_train_dataset = shared_train_dataset.share_memory_()
-	#shared_test_dataset = shared_test_dataset.share_memory_()
-	#shared_dataset.reshape((shared_dataset_len, config["depth_dim"], 2))
-	#print('shared_created')
-	# Spawn one process per GPU
-	children = []
-
-	for i in range(world_size):
-		subproc = mp.Process(target=main_worker, args=(i, world_size, config, shared_train_dataset, shared_test_dataset))
-		children.append(subproc)
-		subproc.start()
-		print(f"Process {i} started.")
-
-	for i in range(world_size):
-		children[i].join()
-
-	"""
-	torch.multiprocessing.spawn(
-		main_worker,
-		args=(world_size, config, shared_train_dataset, shared_test_dataset),
-		nprocs=world_size,
-		join=True
-	)
-	"""
-	
+        for i in range(world_size):
+            children[i].join()
+            
 if __name__ == '__main__':
-	#os.environ["TORCH_DISTRIBUTED_DEBUG"] = "DETAIL"
-	#os.environ["NCCL_DEBUG"] = "DEBUG"
-	#os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1"
-
-	main()
+    main()
