@@ -1,16 +1,10 @@
 test.npy
 /__pycache__
 test.pt
-full_parsed.pt
-full_parsed.npy
-eth_btc_test_indices.npy
-eth_btc_train_indices.npy
-btc_usdt_test_indices.npy
-btc_usdt_train_indices.npy
 /runs
 ppo_model.onnx
 report_dynamo_export.sarif
 ppo_model.pt
 ddp_trainer.py
 step_learning.py
-./dataset_creation/__pycache__
+/dataset_creation/__pycache__

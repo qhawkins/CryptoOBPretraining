@@ -31,7 +31,6 @@ def normalize_data(data: torch.Tensor):
     """
     data[:, :, 0] = price_normalize(data[:, :, 0])
     data[:, :, 1] = volume_normalize(data[:, :, 1])
-    #data[:, :, 2] = normalize_slice(data[:, :, 2])
 
     return data
 
@@ -97,27 +96,20 @@ class LossIncreaseStopper(Stopper):
 		return False
 
 class PretrainingDataset(Dataset):
-	 # Class-level variable to hold the memory map
-
 	def __init__(self, data_path: tuple, start_idx: tuple, end_idx: tuple, temporal_offset: int = 512, azure: bool = False):
 		self.start_idx = start_idx
 		self.end_idx = end_idx
 
 		self.cutoff_point = int(self.end_idx[0] - self.start_idx[0])
 
-		#self.cutoff_point = end_idx[1] - start_idx[1]
-
 		self.length = int((end_idx[0] - start_idx[0]) + (end_idx[1] - start_idx[1]) - (2*temporal_offset))
 
+		# Loading both of the indices files to be used for the data loading
 		self.indices = (
 			np.load(data_path[0]),
 			np.load(data_path[1])
 		)
 
-
-		#self.end_idx = end_idx
-		#self.offset = temporal_offset
-		#self.length = self.end_idx - self.start_idx - self.offset
 		self.azure = azure
 		#self.indices = np.load(data_path)
 		self.temporal_offset = temporal_offset
@@ -131,35 +123,30 @@ class PretrainingDataset(Dataset):
 			if idx < 0 or idx >= self.length:
 				raise IndexError(f"Index {idx} is out of bounds for dataset with length {self.length}")
 
-			#data_slice: np.array = self.data[idx]
-
+			# Only training with BTC-USDT and ETH-BTC for now, plan on implementing XRP-BTC later
+			# Loading the data from the memory-mapped file for RAM efficiency
+			# In the past when training on the full dataset with DDP and multiple workers, 
+			# I would run into OOM issues as the code would try to load the entire dataset for each thread
 			if idx > self.cutoff_point:
 				idx -= self.cutoff_point
 				idx = self.indices[1][int(idx)]+self.temporal_offset
-				self.data = np.load("/media/qhawkins/SSD3/btc_usdt_full_parsed.npy", mmap_mode='r')
+				self.data = np.load("./training_data/semi_parsed/BTC_USDT_full_parsed.npy", mmap_mode='r')
 
 			else:
 				idx = self.indices[0][int(idx)]+self.temporal_offset
-				self.data = np.load("/media/qhawkins/SSD3/eth_btc_full_parsed.npy", mmap_mode='r')
-			
+				self.data = np.load("./training_data/semi_parsed/ETH_BTC_full_parsed.npy", mmap_mode='r')
 
-			#self.data = (
-			#)
-
-			#idx = self.indices[idx]+128
-
-			#if self.azure:
-		#		self.data = np.load("/home/azureuser/datadrive/full_parsed.npy", mmap_mode='r')
-			#else:
-		#		self.data = np.load("/home/qhawkins/Desktop/CryptoOBPretraining/full_parsed.npy", mmap_mode='r')
-
-			#print((f"IDX: {idx}"))
-			#print(f"Temporal Offset: {self.temporal_offset}")
-			#print(type(self.data))
+			# type annotations for clarity
 			data_slice: np.array = self.data[int(idx-self.temporal_offset):int(idx)]
+			
+			# converting into torch tensor for easy ingestion into the model
+			# have to copy the data to avoid modifying the original data
 			data_slice = torch.from_numpy(data_slice.copy())
-			#data_slice = data_slice.clone()
+
+			# normalize the data for training performance
 			normalized = normalize_data(data_slice)
+
+			# if nans are detected, raise error to prevent training with corrupted data
 			nan_count = torch.sum(torch.isnan(normalized))
 			if nan_count > 0:
 				print(f"Found {nan_count} nans in slice {idx}")
