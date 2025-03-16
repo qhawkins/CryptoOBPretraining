@@ -1,4 +1,4 @@
-# FP8-DDP Transformer Pretraining for Financial Order Books
+# FP8-DDP Transformer Pretraining for Cryptocurrency Order Books
 
 ## Overview
 
