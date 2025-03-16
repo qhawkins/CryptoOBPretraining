@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import os
 
-
 def min_max_normalize(data: torch.Tensor):
     min_val = torch.min(data)
     max_val = torch.max(data)
