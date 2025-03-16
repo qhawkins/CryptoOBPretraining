@@ -643,28 +643,38 @@ def main():
     config = {
         'azure': False,
         'model_name': 'pretrained_ddp',
+		# split for train, val, and test
         'split_ratios': [0.7, 0.25, 0.05],
         'lr_decay_factor': 0.5,
         'lr_decay_patience': 5,
         'early_stopping_patience': 15,
         'best_model_path': "best_model.pth",
-        'dropout': 0.0,
+        # 0 dropout because the models I am able to fit in VRAM are under parametirized, meaning overfitting is less of a concern
+		'dropout': 0.0,
+		# adam with weight regularization has worked well for me based on my testing with transformer models
         'optimizer': 'adamw',
         'lr': 1e-4,
 		#reduced batch size for explanatory purposes
         'batch_size': 48, #used to be 96
         'loss': 'mse',
+		# model size option, selects based on the FP8 models file
         "model_size": "deep_narrow_transformer",
         'temporal_dim': 256,
+		# percentage of data to mask during training
         'mask_perc': 0.25,
         'depth_dim': 96,
         'epochs': 10,
         'load_model': False,
-        'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
-        'max_lr': 2.5e-4,
+        # path from which to load pre-trained models if continuing from a checkpoint
+		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
+        # high lr appropriate based on my testing
+		'max_lr': 2.5e-4,
         "backend": "nccl",
+		#gradient accumulation steps
         "accumulation_steps": 4,
+		#grad clipping to prevent loss explosions when converging
         "max_grad_norm": 1.5,
+		#whether to use my learning rate scheduler or not
         "use_scheduler": True
     }
     
@@ -674,12 +684,12 @@ def main():
         shared_test_dataset = "/home/azureuser/datadrive/test_indices.npy"
     else:
         shared_train_dataset = (
-            "/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_train_indices.npy",
-            "/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_train_indices.npy"
+            "./training_data/parsed_indices/ETH_BTC_train_indices.npy",
+            "./training_data/parsed_indices/BTC_USDT_train_indices.npy"
         )
         shared_test_dataset = (
-            "/home/qhawkins/Desktop/CryptoOBPretraining/eth_btc_test_indices.npy",
-            "/home/qhawkins/Desktop/CryptoOBPretraining/btc_usdt_test_indices.npy"
+            "./training_data/parsed_indices/ETH_BTC_test_indices.npy",
+            "./training_data/parsed_indices/BTC_USDT_test_indices.npy"
         )
     
     # Use single GPU if only one is available, otherwise use DDP

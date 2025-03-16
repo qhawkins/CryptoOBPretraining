@@ -719,7 +719,6 @@ class DeepNarrowTransformerModel(torch.nn.Module):
 
         return x_rotated
     
-    
     def forward(self, input):
         #x = x.view(-1, self.inputs_shape)
         #x = x.view(self.temporal_dim, self.depth_dim, self.features_dim)

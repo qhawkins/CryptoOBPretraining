@@ -141,7 +141,8 @@ class PretrainingDataset(Dataset):
 			
 			# converting into torch tensor for easy ingestion into the model
 			# have to copy the data to avoid modifying the original data
-			data_slice = torch.from_numpy(data_slice.copy())
+			# need to convert to float from default of float64
+			data_slice = torch.from_numpy(data_slice.copy()).float()
 
 			# normalize the data for training performance
 			normalized = normalize_data(data_slice)
