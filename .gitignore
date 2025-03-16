@@ -13,3 +13,4 @@ report_dynamo_export.sarif
 ppo_model.pt
 ddp_trainer.py
 step_learning.py
+./dataset_creation/__pycache__

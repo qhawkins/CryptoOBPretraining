@@ -1,10 +1,6 @@
 import pandas as pd
 import numpy as np
-import torch
-import os
-import glob
 import pandas as pd
-from copy import deepcopy
 import numba
 
 @numba.njit(cache=True)
@@ -158,50 +154,48 @@ def optimized_order_book(arr: np.array, snapshots: np.array, max_size: int = 128
     return snapshots, start_idx
             
 if __name__ == "__main__":
+    # price level depth of the parsed order book
     depth = 96
+    
+    # level of subsampling for the parsed order book (1 means no subsampling)
     subsample = 1
+
+    #whether the parsing is happening on Azure VM or not
     azure = False
-    pair = "XRP_BTC"
+    
+    # the pair to parse
+    pair = "BTC_USDT"
+    #pair = "ETH_BTC"
+    #pair = "XRP_BTC"
+    
     if azure:
         raw_data = pd.read_csv("/home/azureuser/data/eth_btc_20231201_20241201.csv", engine="pyarrow", low_memory=True)
     else:
-        raw_data = np.load("/media/qhawkins/SSD3/XRP_BTC_20231201_20241201.npy", mmap_mode='r')[:32768]
+        raw_data = np.load(f"./training_data/raw_sliced/{pair}_20240101_20241201_sliced.npy", mmap_mode='r')#[:32768]
     
     print("loaded")
     print(raw_data.shape)
-    #print(raw_data[0, :])
-    #print(raw_data[-1, :])
-    #exit()
+
+    # creating results array for performance reasons, c contiguous for faster reads/writes
     results = np.zeros((len(raw_data)//subsample, depth, 2), dtype=np.float64, order="C")
+    # numba optimized function to create/parse the order book
     ob_state, start_idx = optimized_order_book(raw_data, results, depth, subsample=subsample)
 
-    #drop any rows with 0s
     print(f"Ob_state shape: {ob_state.shape}")
-    #ob_state = ob_state[~np.any(ob_state == 0, axis=(1, 2))]
-    #print("Sliced")
-    #print(ob_state[-1, :, 0])
-    #ob_state = ob_state/1e7
-    #ob_state = ob_state[:, :, :-1]
-    #ob_state_bf16 = torch.tensor(ob_state, dtype=torch.bfloat16, requires_grad=False)
-    #print(f"Ob_state shape: {ob_state.shape}")
-    '''
+
+    # remove any 0 values from the ob state, 0 values will mess up the whole training pipeline and lead to poor results and nans
+    # a decent portion of the first values of the order book are 0, which is inherent to the way the order book is constructed
+    ob_state = ob_state[~np.any(ob_state == 0, axis=(1, 2))]
+
+    print(f"Final ob_state shape: {ob_state.shape}")
+
     if azure:
         np.save("/home/azureuser/datadrive/full_parsed.npy", ob_state)
     
     else:
-        np.save(f"/media/qhawkins/SSD3/{pair}_full_parsed.npy", ob_state)
-    
-    '''
-    
-    
-    #ob_state = torch.tensor(ob_state, dtype=torch.float64, requires_grad=False)
-    #print(f"bf16 {ob_state_bf16[-1, :, :]}")
+        np.save(f"./training_data/semi_parsed/{pair}_full_parsed.npy", ob_state)
+        
+    # diagnostic printing to verify integrity of parsing
     for idx, entry in enumerate(ob_state[-1, :, :]):
         print(f"Slice {idx}, price: {entry[0]}, size: {entry[1]}")
     
-    #torch.save(ob_state, "full_parsed.pt")
-
-    #np.save("test.npy", ob_state)
-
-    #sorted_levels = sorted(ob_state[-1].keys())
-    #print(ob_state[-1])
