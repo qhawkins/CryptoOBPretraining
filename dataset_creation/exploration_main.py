@@ -71,7 +71,8 @@ if __name__ == "__main__":
     if on_azure:
         ds_path = "/home/azureuser/datadrive/full_parsed.npy"
     else:
-        ds_path = f"./training_data/semi_parsed/{pair}_full_parsed.npy"
+        #ds_path = f"./training_data/semi_parsed/{pair}_full_parsed.npy"
+        ds_path = f"/media/qhawkins/SSD3/training_data/{pair}_full_parsed.npy"
 
     #loading with mmap mode for memory efficiency (important with large datasets)
     data = np.load(ds_path, mmap_mode="r")

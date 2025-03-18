@@ -130,11 +130,13 @@ class PretrainingDataset(Dataset):
 			if idx > self.cutoff_point:
 				idx -= self.cutoff_point
 				idx = self.indices[1][int(idx)]+self.temporal_offset
-				self.data = np.load("./training_data/semi_parsed/BTC_USDT_full_parsed.npy", mmap_mode='r')
+				#self.data = np.load("./training_data/semi_parsed/BTC_USDT_full_parsed.npy", mmap_mode='r')
+				self.data = np.load("/media/qhawkins/SSD3/training_data/XRP_BTC_full_parsed.npy", mmap_mode='r')
 
 			else:
 				idx = self.indices[0][int(idx)]+self.temporal_offset
-				self.data = np.load("./training_data/semi_parsed/ETH_BTC_full_parsed.npy", mmap_mode='r')
+				#self.data = np.load("./training_data/semi_parsed/ETH_BTC_full_parsed.npy", mmap_mode='r')
+				self.data = np.load("/media/qhawkins/SSD3/training_data/ETH_BTC_full_parsed.npy", mmap_mode='r')
 
 			# type annotations for clarity
 			data_slice: np.array = self.data[int(idx-self.temporal_offset):int(idx)]
@@ -152,7 +154,7 @@ class PretrainingDataset(Dataset):
 			if nan_count > 0:
 				print(f"Found {nan_count} nans in slice {idx}")
 				print(normalized)
-				raise ValueError(f"Nans found in normalized slice with indices {idx + self.start_idx}:{idx + self.offset}")
+				raise ValueError(f"Nans found in normalized slice with indices {idx + self.start_idx}:{idx + self.temporal_offset}")
 			return normalized
 		elif isinstance(idx, slice):
 			normalized = self.data[idx]

@@ -815,7 +815,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         self.register_buffer('sin', sin)  # (T, half_dim)
         self.register_buffer('cos', cos)  # (T, half_dim)
 
-        self.conv1 = torch.nn.Conv2d(in_channels=self.temporal_dim, out_channels=self.out_channels, kernel_size=2, stride=2, dilation=1)
+        self.conv1 = torch.nn.Conv2d(in_channels=self.temporal_dim, out_channels=self.out_channels, kernel_size=5, stride=2, padding=2)
         #self.maxpool1 = torch.nn.MaxPool2d(kernel_size=(2,2), stride=(2,2))
         self.conv1_relu = torch.nn.ReLU()
         self.conv1_dropout = torch.nn.Dropout(dropout)
@@ -824,19 +824,21 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         #self.embedding_relu = torch.nn.ReLU()
         #self.embedding_dropout = torch.nn.Dropout(dropout)
         
-        self.output_fc = torch.nn.Linear(int(int(self.depth_dim/2)*self.out_channels), 32)
+        self.output_fc = torch.nn.Linear(int(int((self.depth_dim//2))*self.out_channels), 64)
         self.output_relu = torch.nn.ReLU()
         self.output_dropout = torch.nn.Dropout(dropout)
 
         encoder_layer = torch.nn.TransformerEncoderLayer(
-            d_model=(int(self.depth_dim/2)),
-            dim_feedforward=512,
+            d_model=(int((self.depth_dim//2))),
+            dim_feedforward=768,
             nhead=8,
             dropout=dropout,
             activation="gelu",
             batch_first=True,
         )
         self.encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=12)
+
+        self.output_for_mlm = torch.nn.Linear(64, self.features_dim*self.depth_dim*self.temporal_dim)
     
     def apply_rotary_pos_emb(self, x, sin, cos) -> torch.Tensor:
         """
@@ -872,7 +874,7 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         input = self.conv1(input)
         input = self.conv1_relu(input)
         input = self.conv1_dropout(input)
-        input = input.view(-1, self.out_channels, int(self.depth_dim/2))
+        input = input.view(-1, self.out_channels, int((self.depth_dim//2)))
 
         #print(f"Shape after conv1: {input.shape}")
 
@@ -887,12 +889,16 @@ class DeepNarrowTransformerModelPT(torch.nn.Module):
         #x = self.positional_encoder(x)
         #print(f"Shape after positional encoding: {x.shape}")
         output = self.encoder(input)
-        output = output.view(-1, int(self.depth_dim/2)*self.out_channels)
+        output = output.view(-1, int(self.depth_dim//2)*self.out_channels)
 
         output = self.output_fc(output)
         output = self.output_relu(output)
         output = self.output_dropout(output)
-        #x = output.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        # FOR PRETRAINING, REMOVE WHEN SPLICING TOGETHER FOR PPO MODEL
+        output = self.output_for_mlm(output)
+        
+        output = output.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
+        # x = output.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
 
         #x = x.view(-1, self.temporal_dim, self.depth_dim, self.features_dim)
         return output

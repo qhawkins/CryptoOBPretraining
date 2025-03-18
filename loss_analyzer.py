@@ -74,7 +74,8 @@ def update(frame):
     
     # Adjust the y-axis to fit the data
     ax.set_ylim(min(train_losses_display) * 0.95, max(train_losses_display) * 1.05)
-    
+    #ax.set_xbound(lower=max(0, len(train_losses_display) - most_recent), upper=len(train_losses_display))
+    #ax.set_ybound(lower=min(train_losses_display) * 0.95, upper=max(train_losses_display) * 1.05)
     return line,
 
 # Create the animation

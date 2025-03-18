@@ -8,3 +8,4 @@ ppo_model.pt
 ddp_trainer.py
 step_learning.py
 /dataset_creation/__pycache__
+/training_data

@@ -10,7 +10,7 @@ import numpy as np
 import time
 
 from training_classes import PretrainingDataset
-from fp8_models import TinyTransformerModel, MediumTransformerModel, DeepNarrowTransformerModel
+from fp8_models import TinyTransformerModel, MediumTransformerModel, DeepNarrowTransformerModel, DeepNarrowTransformerModelPT
 
 from transformer_engine.common.recipe import Format, DelayedScaling
 import transformer_engine.pytorch as te
@@ -88,10 +88,12 @@ class Trainer:
 		
 		fp8_format = Format.HYBRID  # E4M3 during forward pass, E5M2 during backward pass
 		self.recipe = DelayedScaling(fp8_format=fp8_format)
-
-		if rank == 0:
+		if self.use_ddp:
+			if rank == 0:
+				self.logger = SummaryWriter()
+		else:
 			self.logger = SummaryWriter()
-	
+
 	def log_gradients_in_model(self, model, logger, step):
 		for tag, value in self.model.named_parameters():
 			if value.grad is not None:
@@ -116,7 +118,8 @@ class Trainer:
 		model_classes = {
 			'tiny_transformer': TinyTransformerModel,
 			'medium_transformer': MediumTransformerModel,
-			'deep_narrow_transformer': DeepNarrowTransformerModel
+			'deep_narrow_transformer': DeepNarrowTransformerModel,
+			"fp16_ppo": DeepNarrowTransformerModelPT
 		}
 		
 		if model_size not in model_classes:
@@ -193,7 +196,7 @@ class Trainer:
 				batch_size=self.config['batch_size'],
 				sampler=self.train_sampler,
 				drop_last=True,
-				num_workers=5,
+				num_workers=8,
 				pin_memory=True,
 				prefetch_factor=4,
 			)
@@ -203,7 +206,7 @@ class Trainer:
 				batch_size=self.config['batch_size'],
 				sampler=self.val_sampler,
 				drop_last=True,
-				num_workers=4,
+				num_workers=6,
 				pin_memory=True,
 			)
 			
@@ -212,7 +215,7 @@ class Trainer:
 				batch_size=self.config['batch_size'],
 				sampler=self.test_sampler,
 				drop_last=True,
-				num_workers=4,
+				num_workers=6,
 				pin_memory=True,
 			)
 		else:
@@ -222,7 +225,7 @@ class Trainer:
 				batch_size=self.config['batch_size'],
 				shuffle=True,
 				drop_last=True,
-				num_workers=5,
+				num_workers=8,
 				pin_memory=True,
 				prefetch_factor=4,
 			)
@@ -232,7 +235,7 @@ class Trainer:
 				batch_size=self.config['batch_size'],
 				shuffle=False,
 				drop_last=True,
-				num_workers=4,
+				num_workers=6,
 				pin_memory=True,
 			)
 			
@@ -241,7 +244,7 @@ class Trainer:
 				batch_size=self.config['batch_size'],
 				shuffle=False,
 				drop_last=True,
-				num_workers=4,
+				num_workers=6,
 				pin_memory=True,
 			)
 		
@@ -258,6 +261,9 @@ class Trainer:
 			int((np.load(self.train_dataset[0], mmap_mode="r").shape[0] * self.config['split_ratios'][1]) + train_sizes[0]),
 			int((np.load(self.train_dataset[1], mmap_mode="r").shape[0] * self.config['split_ratios'][1]) + train_sizes[1])
 		)
+
+		#print(f"Train sizes: {train_sizes}, Val sizes: {val_sizes}, Test sizes: {test_sizes}")
+		#exit()
 
 		self.train_ds = PretrainingDataset(
 			self.train_dataset,
@@ -295,7 +301,8 @@ class Trainer:
 				self.optimizer,
 				max_lr=self.config["max_lr"],
 				epochs=self.config["epochs"],
-				steps_per_epoch=len(self.train_dataloader)
+				steps_per_epoch=len(self.train_dataloader),
+				div_factor=10
 			)
 		self.early_stopping_patience = self.config['early_stopping_patience']
 		self.saved_models = deque(maxlen=self.early_stopping_patience + 1)
@@ -369,15 +376,28 @@ class Trainer:
 				if self.use_ddp and self.world_size > 1:
 					# DDP mode with gradient accumulation
 					if (i + 1) % self.config["accumulation_steps"] != 0:
-						with self.model.no_sync():				
+						with self.model.no_sync():	
+							if self.config["use_fp8"]:			
+								with torch.amp.autocast(enabled=True, device_type="cuda"):
+									outputs = self.model(masked_inputs)
+									loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
+							else:
+								with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
+									outputs = self.model(masked_inputs)
+									loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
+
+							loss.backward()
+					else:
+						if self.config["use_fp8"]:
 							with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
 								outputs = self.model(masked_inputs)
 								loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
-							loss.backward()
-					else:
-						with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
-							outputs = self.model(masked_inputs)
-							loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
+							
+						else:
+							with torch.amp.autocast(enabled=True, device_type="cuda"):
+								outputs = self.model(masked_inputs)
+								loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
+						
 						loss.backward()
 						torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.config["max_grad_norm"])
 						self.optimizer.step()
@@ -385,12 +405,18 @@ class Trainer:
 							self.scheduler.step()
 						self.optimizer.zero_grad(set_to_none=True)
 				else:
-					# Non-DDP mode with gradient accumulation (simpler)
-					with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
-						outputs = self.model(masked_inputs)
-						loss: torch.Tensor = self.criterion(outputs[mask], data[mask])
-						loss = loss / self.config["accumulation_steps"]
-					
+					if self.config["use_fp8"]:
+						with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
+							outputs = self.model(masked_inputs)
+							loss = self.criterion(outputs[mask], data[mask])
+							loss = loss / self.config["accumulation_steps"]
+
+					else:
+						with torch.amp.autocast(enabled=True, device_type="cuda"):
+							outputs = self.model(masked_inputs)
+							loss = self.criterion(outputs[mask], data[mask])
+							loss = loss / self.config["accumulation_steps"]
+			
 					loss.backward()
 					
 					if (i + 1) % self.config["accumulation_steps"] == 0:
@@ -429,10 +455,15 @@ class Trainer:
 						mask_value=0.0,
 						device=self.device
 					)				
+					if self.config["use_fp8"]:
+						with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
+							outputs = self.model(masked_inputs)
+							loss = self.criterion(outputs[mask], data[mask])
 
-					with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
-						outputs = self.model(masked_inputs)
-						loss = self.criterion(outputs[mask], data[mask])
+					else:
+						with torch.amp.autocast(enabled=True, device_type="cuda"):
+							outputs = self.model(masked_inputs)
+							loss = self.criterion(outputs[mask], data[mask])
 
 					if self.config['azure']:
 						with open(f"/home/azureuser/single_models/{self.model_name}_epoch_val_losses.txt", "a+") as f:
@@ -507,11 +538,19 @@ class Trainer:
 					mask_value=0.0,
 					device=self.device
 				)
-				with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
-					outputs = self.model(masked_inputs)
-					loss = self.criterion(outputs[mask], data[mask])
-					test_loss += loss.item()
-			
+				if self.config["use_fp8"]:
+					with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
+						outputs = self.model(masked_inputs)
+						loss = self.criterion(outputs[mask], data[mask])
+						test_loss += loss.item()
+				
+				else:
+					with torch.amp.autocast(enabled=True, device_type="cuda"):
+					#with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
+						outputs = self.model(masked_inputs)
+						loss = self.criterion(outputs[mask], data[mask])
+						test_loss += loss.item()
+				
 			avg_test_loss = test_loss / (i + 1)
 			print(f'{self.model_name} Test Loss ({self.config["loss"]}): {avg_test_loss:.6f}')
 		
@@ -526,11 +565,16 @@ class Trainer:
 					mask_value=0.0,
 					device=self.device
 				)
-				
-				with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
-					outputs = self.model(masked_inputs)
-					loss = mae_loss(outputs[mask], data[mask])
-					test_loss += loss.item()
+				if self.config["use_fp8"]:
+					with te.fp8_autocast(enabled=True, fp8_recipe=self.recipe, fp8_group=self.dp_group):
+						outputs = self.model(masked_inputs)
+						loss = mae_loss(outputs[mask], data[mask])
+						test_loss += loss.item()
+				else:
+					with torch.amp.autocast(enabled=True, device_type="cuda"):
+						outputs = self.model(masked_inputs)
+						loss = mae_loss(outputs[mask], data[mask])
+						test_loss += loss.item()
 		
 		avg_test_mae_loss = test_loss / (i + 1)
 		print(f'{self.model_name} Test Loss (MAE): {avg_test_mae_loss:.6f}')
@@ -653,29 +697,31 @@ def main():
 		'dropout': 0.0,
 		# adam with weight regularization has worked well for me based on my testing with transformer models
         'optimizer': 'adamw',
-        'lr': 1e-4,
+        'lr': 5e-4,
 		#reduced batch size for explanatory purposes
-        'batch_size': 48, #used to be 96
+        'batch_size': 2560, #used to be 96
         'loss': 'mse',
 		# model size option, selects based on the FP8 models file
-        "model_size": "deep_narrow_transformer",
+        "model_size": "fp16_ppo",
         'temporal_dim': 256,
 		# percentage of data to mask during training
         'mask_perc': 0.25,
         'depth_dim': 96,
-        'epochs': 10,
+        'epochs': 25,
         'load_model': False,
         # path from which to load pre-trained models if continuing from a checkpoint
 		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
         # high lr appropriate based on my testing
-		'max_lr': 2.5e-4,
+		'max_lr': 1e-3,
         "backend": "nccl",
 		#gradient accumulation steps
         "accumulation_steps": 4,
 		#grad clipping to prevent loss explosions when converging
-        "max_grad_norm": 1.5,
+        "max_grad_norm": 5,
 		#whether to use my learning rate scheduler or not
-        "use_scheduler": True
+        "use_scheduler": True,
+		#whether to use FP8 training or not
+		"use_fp8": False
     }
     
     # Define datasets
@@ -684,12 +730,17 @@ def main():
         shared_test_dataset = "/home/azureuser/datadrive/test_indices.npy"
     else:
         shared_train_dataset = (
+            #"./training_data/parsed_indices/ETH_BTC_train_indices.npy",
             "./training_data/parsed_indices/ETH_BTC_train_indices.npy",
-            "./training_data/parsed_indices/BTC_USDT_train_indices.npy"
+            "./training_data/parsed_indices/XRP_BTC_train_indices.npy",
+            
+			#"./training_data/parsed_indices/BTC_USDT_train_indices.npy"
         )
         shared_test_dataset = (
+            #"./training_data/parsed_indices/ETH_BTC_test_indices.npy",
+            #"./training_data/parsed_indices/ETH_BTC_test_indices.npy",
             "./training_data/parsed_indices/ETH_BTC_test_indices.npy",
-            "./training_data/parsed_indices/BTC_USDT_test_indices.npy"
+            "./training_data/parsed_indices/XRP_BTC_test_indices.npy"
         )
     
     # Use single GPU if only one is available, otherwise use DDP

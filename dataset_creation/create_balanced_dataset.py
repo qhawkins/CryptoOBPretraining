@@ -127,7 +127,7 @@ if __name__ == "__main__":
     on_azure = False
 
     # Constants
-    K_STD = 3  # Threshold for outlier detection (mean ± K_STD * std)
+    K_STD = 4  # Threshold for outlier detection (mean ± K_STD * std)
     NUM_BINS = 100  # Number of bins for stratification (e.g., deciles)
     TRAIN_RATIO = 0.95  # Proportion of data to be used for training
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     COMPOSITE_WEIGHTS = np.array([0.4, 0.2, 0.3, 0.1])
 
     #number of indices to create
-    TARGET_ENTRIES = 8192
+    TARGET_ENTRIES = 12800000
 
     # temporal dimension of each created slice
     temporal_dim = 256
@@ -153,15 +153,15 @@ if __name__ == "__main__":
     features = 2
     
     #pair of the data to be used
-    pair = "BTC_USDT"
-    #pair = "ETH_BTC"
+    #pair = "BTC_USDT"
+    pair = "ETH_BTC"
     #pair = "XRP_BTC"
 
     if on_azure:
         raw_data = np.load("/home/azureuser/datadrive/full_parsed.npy", mmap_mode="r")
         stats_data  = np.load("/home/azureuser/datadrive/stride_statistics.npy")
     else:
-        raw_data = np.load(f"./training_data/semi_parsed/{pair}_full_parsed.npy", mmap_mode="r")
+        raw_data = np.load(f"/media/qhawkins/SSD3/training_data/{pair}_full_parsed.npy", mmap_mode="r")
         stats_data  = np.load(f"./training_data/stride_statistics/{pair}_stride_statistics.npy")
         
     print(f"Raw data shape: {raw_data.shape}")

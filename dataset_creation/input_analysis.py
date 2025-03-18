@@ -2,5 +2,5 @@ import numpy as np
 import torch
 
 
-data = np.load("/home/qhawkins/Desktop/CryptoOBDataExploration/test_dataset.npy", mmap_mode='r')[:16384, :, 0]
+data = np.load("/media/qhawkins/SSD3/training_data/ETH_BTC_full_parsed.npy", mmap_mode='r')[1160:1416, :, 0]
 print(f"Data zeros count: {np.sum(data == 0)}")
