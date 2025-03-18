@@ -697,7 +697,7 @@ def main():
 		'dropout': 0.0,
 		# adam with weight regularization has worked well for me based on my testing with transformer models
         'optimizer': 'adamw',
-        'lr': 5e-4,
+        'lr': 1e-3,
 		#reduced batch size for explanatory purposes
         'batch_size': 2560, #used to be 96
         'loss': 'mse',
@@ -712,7 +712,7 @@ def main():
         # path from which to load pre-trained models if continuing from a checkpoint
 		'model_path': "/media/qhawkins/SSD3/single_models/pretrained_ddp_val_loss_000135047_epoch_5_mse_medium_transformer.pth",
         # high lr appropriate based on my testing
-		'max_lr': 1e-3,
+		'max_lr': 2.5e-3,
         "backend": "nccl",
 		#gradient accumulation steps
         "accumulation_steps": 4,
